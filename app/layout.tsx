@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import NavProgress from "@/components/NavProgress";
+import ThemeSync from "@/components/ThemeSync";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { ToastProvider } from "@/components/Toaster";
 import "./globals.css";
 
@@ -34,8 +36,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="sw">
+    <html lang="sw" suppressHydrationWarning>
+      <head>
+        {/* Sets data-theme before first paint, so dark-mode users never see a light flash. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="antialiased">
+        <ThemeSync />
         <ToastProvider>
           <Suspense fallback={null}>
             <NavProgress />

@@ -28,7 +28,7 @@ export default async function Settings() {
         <h2 className="font-semibold">Menyu</h2>
         <p className="text-xs text-stone-500">Kilo kwa biriani moja hutumika kwenye “Mpango wa kupika”. Badilisha kulingana na mapishi yako.</p>
         {[...items, null].map((it) => (
-          <ToastForm key={it?.id ?? "new"} action={saveItem} success={it ? "Menyu imehifadhiwa ✓" : "Menyu imeongezwa ✓"} className="space-y-2 rounded-2xl bg-white/50 p-3">
+          <ToastForm key={it?.id ?? "new"} action={saveItem} success={it ? "Menyu imehifadhiwa ✓" : "Menyu imeongezwa ✓"} className="space-y-2 rounded-2xl bg-(--glass) p-3">
             {it && <input type="hidden" name="id" value={it.id} />}
             <input name="name" defaultValue={it?.name ?? ""} placeholder="Jina jipya la menyu" className="input" required />
             <div className="grid grid-cols-3 gap-2">

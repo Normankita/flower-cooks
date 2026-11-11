@@ -6,6 +6,7 @@ import { cycleMode } from "../lib/cycle.ts";
 import { isNetworkMessage, RETRY_DELAYS_S } from "../lib/db-error.ts";
 import { normalizeSupabaseUrl } from "../lib/supabase-url.ts";
 import { csvCell, toCsv } from "../lib/csv.ts";
+import { resolveTheme } from "../lib/theme.ts";
 
 // phones
 assert.equal(normalizePhone("0712 345 678"), "255712345678");
@@ -54,6 +55,14 @@ assert.equal(cycleMode(cyc, new Date("2026-11-10T00:00:00Z")), "open");
 assert.equal(cycleMode(cyc, new Date("2026-11-12T18:00:00Z")), "late");
 assert.equal(cycleMode(cyc, new Date("2026-11-13T10:00:00Z")), "closed");
 assert.equal(cycleMode({ ...cyc, status: "closed" }, new Date("2026-11-10T00:00:00Z")), "closed");
+// theme
+assert.equal(resolveTheme("dark", false), "dark");
+assert.equal(resolveTheme("light", true), "light");
+assert.equal(resolveTheme("system", true), "dark");
+assert.equal(resolveTheme("system", false), "light");
+assert.equal(resolveTheme(null, true), "dark");
+assert.equal(resolveTheme(undefined, false), "light");
+assert.equal(resolveTheme("garbage", true), "dark");
 // csv
 assert.equal(csvCell("plain"), "plain");
 assert.equal(csvCell(null), "");

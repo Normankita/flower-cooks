@@ -1,4 +1,5 @@
 import AdminNav from "@/components/AdminNav";
+import ThemeToggle from "@/components/ThemeToggle";
 import { requireAdmin } from "@/lib/auth";
 import { logoutAction } from "../actions";
 
@@ -14,9 +15,12 @@ export default async function PanelLayout({ children }: { children: React.ReactN
           <span className="float text-xl" aria-hidden>🍛</span>
           <span>{process.env.NEXT_PUBLIC_BRAND ?? "Biriani ya Ijumaa"}</span>
         </div>
-        <form action={logoutAction}>
-          <button className="rounded-full px-3 py-1.5 text-sm font-medium text-stone-600 transition hover:bg-white/70">Toka</button>
-        </form>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <form action={logoutAction}>
+            <button className="rounded-full px-3 py-1.5 text-sm font-medium text-stone-600 transition hover:bg-(--glass)">Toka</button>
+          </form>
+        </div>
       </header>
       {children}
       <AdminNav />

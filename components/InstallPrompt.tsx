@@ -87,7 +87,7 @@ export default function InstallPrompt({ t }: { t: Dict }) {
           {t.installBtn}
         </button>
       )}
-      <button type="button" aria-label={t.installClose} className="rounded-full p-1.5 text-stone-500 transition hover:bg-white/70" onClick={close}>
+      <button type="button" aria-label={t.installClose} className="rounded-full p-1.5 text-stone-500 transition hover:bg-(--glass)" onClick={close}>
         ✕
       </button>
     </div>

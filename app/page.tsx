@@ -1,6 +1,8 @@
 import Link from "next/link";
 import InstallPrompt from "@/components/InstallPrompt";
 import OrderForm from "@/components/OrderForm";
+import ThemeSuggest from "@/components/ThemeSuggest";
+import ThemeToggle from "@/components/ThemeToggle";
 import { cycleMode, getCurrentCycle, getMenu, getOffices, portionsTaken } from "@/lib/data";
 import { fill, getLang, strings } from "@/lib/i18n";
 import { fmtDateTime } from "@/lib/time";
@@ -32,14 +34,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
             <span className="float text-4xl" aria-hidden>🍛</span>
             <span className="bg-linear-to-r from-orange-700 via-red-600 to-amber-600 bg-clip-text text-transparent">{brand}</span>
           </h1>
-          <Link href={`/?lang=${other}`} className="glass rounded-full px-3.5 py-1.5 text-sm font-semibold text-stone-700 transition hover:scale-105 active:scale-95">
-            {other.toUpperCase()}
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle label={t.themeToggle} />
+            <Link href={`/?lang=${other}`} className="glass rounded-full px-3.5 py-1.5 text-sm font-semibold text-stone-700 transition hover:scale-105 active:scale-95">
+              {other.toUpperCase()}
+            </Link>
+          </div>
         </div>
         <p className="text-stone-600">{t.tagline}</p>
       </header>
 
       <InstallPrompt t={t} />
+      <ThemeSuggest t={t} />
 
       {cycle && (mode === "open" || mode === "late") && (
         <div className="card grid grid-cols-2 gap-3 text-sm">
