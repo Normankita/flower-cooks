@@ -99,7 +99,10 @@ export default async function DeliveryPage({ searchParams }: { searchParams: Pro
       {route.length === 0 && <p className="text-sm text-stone-500">Hakuna oda za kuleta bado.</p>}
 
       <section className="space-y-2">
-        <h2 className="font-semibold">🧾 Madeni (yote, mizunguko yote)</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">🧾 Madeni (yote, mizunguko yote)</h2>
+          <a href="/admin/export/debts" download className="btn-ghost btn-sm">⬇️ Pakua CSV</a>
+        </div>
         {debtList.length === 0 && <p className="text-sm text-stone-500">Hakuna deni 🎉</p>}
         {debtList.map((d) => {
           const msg = `Habari ${d.name.split(" ")[0]}, kumbusho dogo la malipo ya biriani: ${tzs(d.total)}. Asante! 🙏`;

@@ -16,6 +16,7 @@ the cook gets a cooking plan, delivery sheet, payment tracking and review collec
 - **Muhtasari:** cycle status, portions vs capacity, cooking plan (portions, kg rice, kg meat/chicken), money split paid / reported / unpaid, ready-made WhatsApp messages (open, reminder, last call).
 - **Oda:** all orders, approve/decline late requests, mark delivered/paid/cancelled, add orders received by WhatsApp or phone.
 - **Uletaji:** delivery sheet grouped by office with "amount to collect", review-request WhatsApp links, and **debts across all cycles** with reminder links.
+- **Export (CSV, opens in Excel/Sheets):** *Oda* page → all orders (all cycles) or just the selected cycle; *Uletaji* → debts across all cycles. Routes: `/admin/export/orders[?c=<cycle id>]`, `/admin/export/debts` (admin-only).
 - **Mipangilio:** cycle times, capacity, Lipa Namba, menu & prices & kg-per-portion, offices.
 
 ## Setup

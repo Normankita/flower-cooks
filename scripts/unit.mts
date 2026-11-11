@@ -5,6 +5,7 @@ import { summarize } from "../lib/summary.ts";
 import { cycleMode } from "../lib/cycle.ts";
 import { isNetworkMessage, RETRY_DELAYS_S } from "../lib/db-error.ts";
 import { normalizeSupabaseUrl } from "../lib/supabase-url.ts";
+import { csvCell, toCsv } from "../lib/csv.ts";
 
 // phones
 assert.equal(normalizePhone("0712 345 678"), "255712345678");
@@ -53,6 +54,21 @@ assert.equal(cycleMode(cyc, new Date("2026-11-10T00:00:00Z")), "open");
 assert.equal(cycleMode(cyc, new Date("2026-11-12T18:00:00Z")), "late");
 assert.equal(cycleMode(cyc, new Date("2026-11-13T10:00:00Z")), "closed");
 assert.equal(cycleMode({ ...cyc, status: "closed" }, new Date("2026-11-10T00:00:00Z")), "closed");
+// csv
+assert.equal(csvCell("plain"), "plain");
+assert.equal(csvCell(null), "");
+assert.equal(csvCell(undefined), "");
+assert.equal(csvCell(8000), "8000");
+assert.equal(csvCell(NaN), "");
+assert.equal(csvCell("a,b"), '"a,b"');
+assert.equal(csvCell('say "hi"'), '"say ""hi"""');
+assert.equal(csvCell("line1\nline2"), '"line1\nline2"');
+assert.equal(csvCell("=HYPERLINK(\"http://x\")"), '"\'=HYPERLINK(""http://x"")"'); // formula neutralised + quoted
+assert.equal(csvCell("+255712345678"), "'+255712345678");
+assert.equal(csvCell("-5"), "'-5");
+assert.equal(csvCell("@cmd"), "'@cmd");
+assert.equal(csvCell("0712 345 678"), "0712 345 678");
+assert.equal(toCsv([["Jina", "Jumla"], ["Asha, M", 16000]]), '﻿Jina,Jumla\r\n"Asha, M",16000\r\n');
 // supabase url cleanup
 assert.equal(normalizeSupabaseUrl("https://abc.supabase.co"), "https://abc.supabase.co");
 assert.equal(normalizeSupabaseUrl('"https://abc.supabase.co/rest/v1/"'), "https://abc.supabase.co");

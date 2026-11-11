@@ -105,6 +105,11 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         <CycleSwitcher cycles={cycles} current={cycle.id} />
         <Link href="/admin/orders/new" className="btn btn-sm">+ Weka oda (simu/WhatsApp)</Link>
       </div>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-stone-500">Pakua (CSV/Excel):</span>
+        <a href={`/admin/export/orders?c=${cycle.id}`} download className="btn-ghost btn-sm">⬇️ Mzunguko huu</a>
+        <a href="/admin/export/orders" download className="btn-ghost btn-sm">⬇️ Oda zote</a>
+      </div>
       {late.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-semibold text-orange-800">Maombi ya ziada ({late.length})</h2>
