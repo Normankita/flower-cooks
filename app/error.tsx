@@ -11,9 +11,10 @@ export default function ErrorPage({ error, retry }: { error: Error & { digest?: 
     <main className="mx-auto max-w-lg space-y-4 px-4 py-10">
       <h1 className="text-2xl font-extrabold text-orange-800">🍛 Huduma haipatikani kwa sasa</h1>
       <p className="card">
-        Kuna tatizo la mtandao. Tafadhali jaribu tena baada ya muda mfupi.
+        Kuna tatizo. Tafadhali jaribu tena baada ya muda mfupi.
         <br />
-        <span className="text-stone-500">There is a network problem. Please try again in a moment.</span>
+        <span className="text-stone-500">Something went wrong. Please try again in a moment.</span>
+        {error.digest && <span className="mt-2 block text-xs text-stone-400">Ref: {error.digest}</span>}
       </p>
       <button className="btn" onClick={() => retry()}>Jaribu tena / Try again</button>
     </main>

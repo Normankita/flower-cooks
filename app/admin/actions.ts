@@ -9,13 +9,19 @@ import { createOrder, parseOrderForm } from "@/lib/orders";
 import { nextWeekdayEAT, parseEATInput } from "@/lib/time";
 import { strings } from "@/lib/i18n";
 import { DbUnavailableError } from "@/lib/db-error";
+import { fail, fromDb, type ActionResult } from "@/lib/result";
 
-type FormState = { error?: string; retry?: boolean };
+type FormState = { error?: string; retry?: boolean; redirectTo?: string };
 const refresh = () => revalidatePath("/admin", "layout");
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 const int = (fd: FormData, k: string, d = 0) => {
   const n = Math.round(Number(fd.get(k)));
   return Number.isFinite(n) ? n : d;
+};
+/** Revalidate on success and convert the DB error (if any) into an ActionResult. */
+const finish = (error: { message: string } | null): ActionResult => {
+  if (!error) refresh();
+  return fromDb(error);
 };
 
 /* ---------- auth ---------- */
@@ -35,17 +41,17 @@ export async function logoutAction() {
 }
 
 /* ---------- orders ---------- */
-export async function setOrderStatus(fd: FormData) {
+export async function setOrderStatus(fd: FormData): Promise<ActionResult> {
   await requireAdmin();
   const status = str(fd, "status");
-  if (!["confirmed", "declined", "cancelled", "delivered"].includes(status)) return;
+  if (!["confirmed", "declined", "cancelled", "delivered"].includes(status)) return fail("Hali si sahihi.");
   const patch: Record<string, unknown> = { status };
   if (status === "delivered") patch.delivered_at = new Date().toISOString();
-  await db().from("orders").update(patch).eq("id", str(fd, "order_id"));
-  refresh();
+  const { error } = await db().from("orders").update(patch).eq("id", str(fd, "order_id"));
+  return finish(error);
 }
 
-export async function setPayment(fd: FormData) {
+export async function setPayment(fd: FormData): Promise<ActionResult> {
   await requireAdmin();
   const paid = str(fd, "paid") === "1";
   const ref = str(fd, "ref").slice(0, 40);
@@ -53,8 +59,8 @@ export async function setPayment(fd: FormData) {
     ? { payment_status: "paid", paid_at: new Date().toISOString() }
     : { payment_status: "unpaid", paid_at: null };
   if (paid && ref) patch.payment_ref = ref;
-  await db().from("orders").update(patch).eq("id", str(fd, "order_id"));
-  refresh();
+  const { error } = await db().from("orders").update(patch).eq("id", str(fd, "order_id"));
+  return finish(error);
 }
 
 export async function adminPlaceOrder(_: FormState, fd: FormData): Promise<FormState> {
@@ -72,17 +78,22 @@ export async function adminPlaceOrder(_: FormState, fd: FormData): Promise<FormS
   const res = await createOrder(cycle, parsed.value, "admin");
   if (!res.ok) return { error: strings("sw")[res.code], retry: res.code === "errNetwork" };
   refresh();
-  redirect("/admin/orders");
+  return { redirectTo: "/admin/orders" };
 }
 
 /* ---------- cycles ---------- */
-export async function createCycle() {
+export async function createCycle(): Promise<ActionResult> {
   await requireAdmin();
-  const prev = await getCurrentCycle();
+  let prev;
+  try {
+    prev = await getCurrentCycle();
+  } catch {
+    return fail("Tatizo la mtandao. Jaribu tena.");
+  }
   const closes = nextWeekdayEAT(4, 20, 0); // Thursday 20:00 EAT
   const delivery = nextWeekdayEAT(5, 13, 0, closes); // Friday 13:00 EAT
   const label = new Intl.DateTimeFormat("sw-TZ", { timeZone: "Africa/Dar_es_Salaam", day: "numeric", month: "short" }).format(delivery);
-  await db().from("cycles").insert({
+  const { error } = await db().from("cycles").insert({
     title: `Biriani ya Ijumaa ${label}`,
     opens_at: new Date().toISOString(),
     closes_at: closes.toISOString(),
@@ -91,23 +102,22 @@ export async function createCycle() {
     lipa_namba: prev?.lipa_namba ?? null,
     status: "open",
   });
-  refresh();
-  redirect("/admin");
+  return finish(error);
 }
 
-export async function toggleCycle(fd: FormData) {
+export async function toggleCycle(fd: FormData): Promise<ActionResult> {
   await requireAdmin();
   const status = str(fd, "status") === "closed" ? "closed" : "open";
-  await db().from("cycles").update({ status }).eq("id", str(fd, "cycle_id"));
-  refresh();
+  const { error } = await db().from("cycles").update({ status }).eq("id", str(fd, "cycle_id"));
+  return finish(error);
 }
 
-export async function saveCycle(fd: FormData) {
+export async function saveCycle(fd: FormData): Promise<ActionResult> {
   await requireAdmin();
   const closes = parseEATInput(str(fd, "closes_at"));
   const delivery = parseEATInput(str(fd, "delivery_at"));
-  if (!closes || !delivery) return;
-  await db()
+  if (!closes || !delivery) return fail("Tarehe si sahihi.");
+  const { error } = await db()
     .from("cycles")
     .update({
       title: str(fd, "title").slice(0, 80) || "Biriani ya Ijumaa",
@@ -117,11 +127,11 @@ export async function saveCycle(fd: FormData) {
       lipa_namba: str(fd, "lipa_namba").slice(0, 20) || null,
     })
     .eq("id", str(fd, "cycle_id"));
-  refresh();
+  return finish(error);
 }
 
 /* ---------- menu & offices ---------- */
-export async function saveItem(fd: FormData) {
+export async function saveItem(fd: FormData): Promise<ActionResult> {
   await requireAdmin();
   const row = {
     name: str(fd, "name").slice(0, 60),
@@ -130,19 +140,21 @@ export async function saveItem(fd: FormData) {
     protein_kg: Math.max(0, Number(fd.get("protein_kg")) || 0),
     active: fd.get("active") === "on",
   };
-  if (!row.name) return;
+  if (!row.name) return fail("Andika jina la menyu.");
   const id = str(fd, "id");
-  if (id) await db().from("menu_items").update(row).eq("id", id);
-  else await db().from("menu_items").insert({ ...row, active: true, sort: 99 });
-  refresh();
+  const { error } = id
+    ? await db().from("menu_items").update(row).eq("id", id)
+    : await db().from("menu_items").insert({ ...row, active: true, sort: 99 });
+  return finish(error);
 }
 
-export async function saveOffice(fd: FormData) {
+export async function saveOffice(fd: FormData): Promise<ActionResult> {
   await requireAdmin();
   const name = str(fd, "name").slice(0, 60);
-  if (!name) return;
+  if (!name) return fail("Andika jina la ofisi.");
   const id = str(fd, "id");
-  if (id) await db().from("offices").update({ name, active: fd.get("active") === "on" }).eq("id", id);
-  else await db().from("offices").insert({ name, sort: 99 });
-  refresh();
+  const { error } = id
+    ? await db().from("offices").update({ name, active: fd.get("active") === "on" }).eq("id", id)
+    : await db().from("offices").insert({ name, sort: 99 });
+  return finish(error);
 }

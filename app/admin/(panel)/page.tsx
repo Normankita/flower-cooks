@@ -2,6 +2,7 @@ import Link from "next/link";
 import CopyButton from "@/components/CopyButton";
 import CycleSwitcher from "@/components/CycleSwitcher";
 import SubmitButton from "@/components/SubmitButton";
+import ToastForm from "@/components/ToastForm";
 import { cycleMode, getMenu, getOrders, getRecentCycles, selectCycle } from "@/lib/data";
 import { summarize } from "@/lib/summary";
 import { fmtDateTime, tzs } from "@/lib/time";
@@ -15,7 +16,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     return (
       <div className="card space-y-3">
         <p>Hakuna mzunguko bado. Anza wa kwanza:</p>
-        <form action={createCycle}><SubmitButton>Tengeneza mzunguko wa Ijumaa</SubmitButton></form>
+        <ToastForm action={createCycle} success="Mzunguko mpya umeundwa ✓"><SubmitButton>Tengeneza mzunguko wa Ijumaa</SubmitButton></ToastForm>
       </div>
     );
   }
@@ -45,7 +46,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <CycleSwitcher cycles={cycles} current={cycle.id} />
-        <form action={createCycle}><SubmitButton className="btn-ghost btn-sm">+ Mzunguko mpya</SubmitButton></form>
+        <ToastForm action={createCycle} success="Mzunguko mpya umeundwa ✓"><SubmitButton className="btn-ghost btn-sm">+ Mzunguko mpya</SubmitButton></ToastForm>
       </div>
 
       <section className="card space-y-2">
@@ -58,11 +59,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <span className="badge bg-orange-100 text-orange-800">{modeLabel[mode]}</span>
         </div>
         <div className="text-sm">Biriani zilizokubaliwa: <b>{s.portions}</b> / {cycle.capacity} · Wateja: <b>{s.customers}</b></div>
-        <form action={toggleCycle}>
+        <ToastForm action={toggleCycle} success={cycle.status === "open" ? "Oda zimefungwa" : "Oda zimefunguliwa ✓"}>
           <input type="hidden" name="cycle_id" value={cycle.id} />
           <input type="hidden" name="status" value={cycle.status === "open" ? "closed" : "open"} />
           <SubmitButton className="btn-ghost btn-sm">{cycle.status === "open" ? "Funga oda kabisa" : "Fungua tena"}</SubmitButton>
-        </form>
+        </ToastForm>
       </section>
 
       {s.lateCount > 0 && (

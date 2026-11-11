@@ -1,5 +1,7 @@
 import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
+import SuccessMark from "@/components/SuccessMark";
+import ToastForm from "@/components/ToastForm";
 import { getCycle, getOrder } from "@/lib/data";
 import { fill, getLang, strings } from "@/lib/i18n";
 import { tzs } from "@/lib/time";
@@ -38,6 +40,7 @@ export default async function OrderPage({
     : order.status === "cancelled" ? t.cancelled
     : order.status === "delivered" ? t.delivered
     : t.orderReceived;
+  const good = order.status === "confirmed" || order.status === "delivered" || order.status === "late_request";
 
   const hidden = (
     <>
@@ -48,10 +51,13 @@ export default async function OrderPage({
 
   return (
     <main className="mx-auto max-w-lg space-y-4 px-4 py-6">
-      <h1 className="text-2xl font-extrabold text-orange-800">
-        {fill(t.thanks, { name: order.customers?.name.split(" ")[0] ?? "" })}
-      </h1>
-      <p className="card font-medium">{banner}</p>
+      <div className="flex flex-col items-center gap-2 pt-2 text-center">
+        {good && <SuccessMark />}
+        <h1 className="text-2xl font-extrabold text-orange-800">
+          {fill(t.thanks, { name: order.customers?.name.split(" ")[0] ?? "" })}
+        </h1>
+        <p className="text-stone-700">{banner}</p>
+      </div>
 
       <section className="card space-y-2">
         <h2 className="font-semibold">{t.yourOrder}</h2>
@@ -61,12 +67,12 @@ export default async function OrderPage({
             <span>{tzs(l.qty * l.unit_price)}</span>
           </div>
         ))}
-        <div className="flex justify-between border-t pt-2 font-bold">
+        <div className="flex justify-between border-t border-stone-300/50 pt-2 text-lg font-bold">
           <span>{t.total}</span>
           <span>{tzs(order.total)}</span>
         </div>
         <div className="text-sm text-stone-600">
-          {order.offices?.name}
+          📍 {order.offices?.name}
           {order.delivery_note ? ` · ${order.delivery_note}` : ""}
         </div>
       </section>
@@ -81,7 +87,7 @@ export default async function OrderPage({
           {cycle?.lipa_namba ? (
             <>
               <p className="text-sm text-stone-600">{t.payLipaHow}</p>
-              <div className="rounded-xl bg-orange-50 p-3 text-center">
+              <div className="rounded-2xl bg-linear-to-br from-orange-100/90 to-amber-100/80 p-4 text-center shadow-inner">
                 <div className="text-sm text-stone-600">{t.lipaNumber}</div>
                 <div className="text-3xl font-extrabold tracking-widest">{cycle.lipa_namba}</div>
                 <div className="text-sm text-stone-600">{t.amount}: <b>{tzs(order.total)}</b></div>
@@ -89,11 +95,11 @@ export default async function OrderPage({
               {order.payment_status === "reported" ? (
                 <p className="text-sm text-green-700">{t.payRefSaved} ({order.payment_ref})</p>
               ) : (
-                <form action={reportPayment} className="flex gap-2">
+                <ToastForm action={reportPayment} success={t.payRefSaved} errorText={t.errToast} className="flex gap-2">
                   {hidden}
                   <input name="ref" className="input" placeholder={t.payRefLabel} maxLength={40} required />
                   <SubmitButton className="btn">{t.payRefSave}</SubmitButton>
-                </form>
+                </ToastForm>
               )}
             </>
           ) : (
@@ -122,10 +128,10 @@ export default async function OrderPage({
       </section>
 
       {canCancel && (
-        <form action={cancelOrder}>
+        <ToastForm action={cancelOrder} success={t.cancelled} errorText={t.errToast}>
           {hidden}
           <SubmitButton className="btn-red">{t.cancelOrder}</SubmitButton>
-        </form>
+        </ToastForm>
       )}
     </main>
   );

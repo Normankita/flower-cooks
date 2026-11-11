@@ -4,6 +4,7 @@ import { nextWeekdayEAT, parseEATInput, toEATInput } from "../lib/time.ts";
 import { summarize } from "../lib/summary.ts";
 import { cycleMode } from "../lib/cycle.ts";
 import { isNetworkMessage, RETRY_DELAYS_S } from "../lib/db-error.ts";
+import { normalizeSupabaseUrl } from "../lib/supabase-url.ts";
 
 // phones
 assert.equal(normalizePhone("0712 345 678"), "255712345678");
@@ -52,6 +53,12 @@ assert.equal(cycleMode(cyc, new Date("2026-11-10T00:00:00Z")), "open");
 assert.equal(cycleMode(cyc, new Date("2026-11-12T18:00:00Z")), "late");
 assert.equal(cycleMode(cyc, new Date("2026-11-13T10:00:00Z")), "closed");
 assert.equal(cycleMode({ ...cyc, status: "closed" }, new Date("2026-11-10T00:00:00Z")), "closed");
+// supabase url cleanup
+assert.equal(normalizeSupabaseUrl("https://abc.supabase.co"), "https://abc.supabase.co");
+assert.equal(normalizeSupabaseUrl('"https://abc.supabase.co/rest/v1/"'), "https://abc.supabase.co");
+assert.equal(normalizeSupabaseUrl("  abc.supabase.co \n"), "https://abc.supabase.co");
+assert.equal(normalizeSupabaseUrl(""), "");
+assert.equal(normalizeSupabaseUrl(undefined), "");
 // network error detection
 assert.equal(isNetworkMessage("TypeError: fetch failed"), true);
 assert.equal(isNetworkMessage("TimeoutError: The operation was aborted due to timeout"), true);

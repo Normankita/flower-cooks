@@ -21,7 +21,9 @@ export default async function NewOrder() {
         lang="sw"
         t={strings("sw")}
         submitLabel="Weka oda"
+        successText="Oda imewekwa ✓"
         remember={false}
+        sticky={false}
       />
     </div>
   );

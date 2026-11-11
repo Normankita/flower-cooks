@@ -1,6 +1,7 @@
 import Link from "next/link";
 import CycleSwitcher from "@/components/CycleSwitcher";
 import SubmitButton from "@/components/SubmitButton";
+import ToastForm from "@/components/ToastForm";
 import { getOrders, getRecentCycles, selectCycle } from "@/lib/data";
 import { displayPhone } from "@/lib/phone";
 import { linesText } from "@/lib/summary";
@@ -21,13 +22,20 @@ const payBadge: Record<string, [string, string]> = {
   paid: ["Imelipwa", "bg-green-100 text-green-800"],
 };
 
+const statusToast: Record<string, string> = {
+  confirmed: "Oda imekubaliwa ✓",
+  declined: "Oda imekataliwa",
+  delivered: "Imewekwa kuwa imeletwa ✓",
+  cancelled: "Oda imeghairiwa",
+};
+
 function StatusBtn({ id, status, label, cls }: { id: string; status: string; label: string; cls: string }) {
   return (
-    <form action={setOrderStatus}>
+    <ToastForm action={setOrderStatus} success={statusToast[status]}>
       <input type="hidden" name="order_id" value={id} />
       <input type="hidden" name="status" value={status} />
       <SubmitButton className={cls}>{label}</SubmitButton>
-    </form>
+    </ToastForm>
   );
 }
 
@@ -65,7 +73,7 @@ function Row({ o }: { o: Order }) {
           )}
           {o.status === "confirmed" && <StatusBtn id={o.id} status="delivered" label="Imeletwa" cls="btn-green" />}
           {o.status !== "late_request" && (
-            <form action={setPayment} className="flex gap-2">
+            <ToastForm action={setPayment} success={o.payment_status === "paid" ? "Malipo yametenguliwa" : "Malipo yamehifadhiwa ✓"} className="flex gap-2">
               <input type="hidden" name="order_id" value={o.id} />
               {o.payment_status === "paid" ? (
                 <SubmitButton className="btn-red">Tengua malipo</SubmitButton>
@@ -75,7 +83,7 @@ function Row({ o }: { o: Order }) {
                   <SubmitButton className="btn-green">Amelipa ✓</SubmitButton>
                 </>
               )}
-            </form>
+            </ToastForm>
           )}
           {o.status === "confirmed" && <StatusBtn id={o.id} status="cancelled" label="Ghairi" cls="btn-red" />}
         </div>

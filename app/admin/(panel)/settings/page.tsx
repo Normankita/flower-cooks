@@ -1,4 +1,5 @@
 import SubmitButton from "@/components/SubmitButton";
+import ToastForm from "@/components/ToastForm";
 import { getMenu, getOffices, getCurrentCycle } from "@/lib/data";
 import { toEATInput } from "@/lib/time";
 import { saveCycle, saveItem, saveOffice } from "../../actions";
@@ -9,7 +10,7 @@ export default async function Settings() {
   return (
     <div className="space-y-6">
       {cycle && (
-        <form action={saveCycle} className="card space-y-3">
+        <ToastForm action={saveCycle} success="Mipangilio imehifadhiwa ✓" className="card space-y-3">
           <h2 className="font-semibold">Mzunguko wa sasa</h2>
           <input type="hidden" name="cycle_id" value={cycle.id} />
           <div><label className="label">Jina</label><input name="title" defaultValue={cycle.title} className="input" /></div>
@@ -20,14 +21,14 @@ export default async function Settings() {
             <div><label className="label">Lipa Namba</label><input name="lipa_namba" defaultValue={cycle.lipa_namba ?? ""} className="input" inputMode="numeric" /></div>
           </div>
           <SubmitButton>Hifadhi</SubmitButton>
-        </form>
+        </ToastForm>
       )}
 
       <section className="card space-y-3">
         <h2 className="font-semibold">Menyu</h2>
         <p className="text-xs text-stone-500">Kilo kwa biriani moja hutumika kwenye “Mpango wa kupika”. Badilisha kulingana na mapishi yako.</p>
         {[...items, null].map((it) => (
-          <form key={it?.id ?? "new"} action={saveItem} className="space-y-2 rounded-xl bg-stone-50 p-3">
+          <ToastForm key={it?.id ?? "new"} action={saveItem} success={it ? "Menyu imehifadhiwa ✓" : "Menyu imeongezwa ✓"} className="space-y-2 rounded-2xl bg-white/50 p-3">
             {it && <input type="hidden" name="id" value={it.id} />}
             <input name="name" defaultValue={it?.name ?? ""} placeholder="Jina jipya la menyu" className="input" required />
             <div className="grid grid-cols-3 gap-2">
@@ -41,19 +42,19 @@ export default async function Settings() {
               ) : <span />}
               <SubmitButton className="btn btn-sm">{it ? "Hifadhi" : "+ Ongeza"}</SubmitButton>
             </div>
-          </form>
+          </ToastForm>
         ))}
       </section>
 
       <section className="card space-y-3">
         <h2 className="font-semibold">Ofisi / maeneo ya kuleta</h2>
         {[...offices, null].map((o) => (
-          <form key={o?.id ?? "new"} action={saveOffice} className="flex items-center gap-2">
+          <ToastForm key={o?.id ?? "new"} action={saveOffice} success={o ? "Ofisi imehifadhiwa ✓" : "Ofisi imeongezwa ✓"} className="flex items-center gap-2">
             {o && <input type="hidden" name="id" value={o.id} />}
             <input name="name" defaultValue={o?.name ?? ""} placeholder="Ofisi mpya" className="input" required />
             {o && <label className="flex items-center gap-1 text-sm whitespace-nowrap"><input type="checkbox" name="active" defaultChecked={o.active} className="accent-orange-700" /> Ipo</label>}
             <SubmitButton className="btn btn-sm">{o ? "Hifadhi" : "+"}</SubmitButton>
-          </form>
+          </ToastForm>
         ))}
       </section>
     </div>

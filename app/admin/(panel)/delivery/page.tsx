@@ -1,5 +1,6 @@
 import CycleSwitcher from "@/components/CycleSwitcher";
 import SubmitButton from "@/components/SubmitButton";
+import ToastForm from "@/components/ToastForm";
 import { ORDER_SELECT, getOrders, getRecentCycles, selectCycle } from "@/lib/data";
 import { displayPhone } from "@/lib/phone";
 import { linesText } from "@/lib/summary";
@@ -71,18 +72,18 @@ export default async function DeliveryPage({ searchParams }: { searchParams: Pro
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {!done && (
-                    <form action={setOrderStatus}>
+                    <ToastForm action={setOrderStatus} success="Imewekwa kuwa imeletwa ✓">
                       <input type="hidden" name="order_id" value={o.id} />
                       <input type="hidden" name="status" value="delivered" />
                       <SubmitButton className="btn-green">Imeletwa</SubmitButton>
-                    </form>
+                    </ToastForm>
                   )}
                   {o.payment_status !== "paid" && (
-                    <form action={setPayment}>
+                    <ToastForm action={setPayment} success="Malipo yamehifadhiwa ✓">
                       <input type="hidden" name="order_id" value={o.id} />
                       <input type="hidden" name="paid" value="1" />
                       <SubmitButton className="btn-green">Amelipa ✓</SubmitButton>
-                    </form>
+                    </ToastForm>
                   )}
                   {done && (
                     <a className="btn-ghost btn-sm" target="_blank" href={`https://wa.me/${o.customers?.phone}?text=${encodeURIComponent(reviewMsg)}`}>

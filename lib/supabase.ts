@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { normalizeSupabaseUrl } from "./supabase-url";
 
 let client: SupabaseClient | null = null;
 
@@ -27,10 +28,12 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
 /** Server-only client using the service-role key. Never import this in a client component. */
 export function db(): SupabaseClient {
   if (client) return client;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = normalizeSupabaseUrl(process.env.SUPABASE_URL);
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim().replace(/^["']+|["']+$/g, "");
   if (!url || !key) {
-    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set");
+    throw new Error(
+      "SUPABASE_URL (must look like https://<ref>.supabase.co) and SUPABASE_SERVICE_ROLE_KEY must be set",
+    );
   }
   client = createClient(url, key, { auth: { persistSession: false }, global: { fetch: fetchWithTimeout } });
   return client;
