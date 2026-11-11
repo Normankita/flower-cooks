@@ -4,9 +4,26 @@ import NavProgress from "@/components/NavProgress";
 import { ToastProvider } from "@/components/Toaster";
 import "./globals.css";
 
+const brand = process.env.NEXT_PUBLIC_BRAND ?? "Biriani ya Ijumaa";
+const description = "Oda biriani hadi Alhamisi, tunakuletea Ijumaa mchana.";
+
+// Absolute base URL so link-preview images get full URLs (WhatsApp ignores relative og:image).
+function siteUrl(): URL | undefined {
+  try {
+    return new URL((process.env.NEXT_PUBLIC_SITE_URL ?? "").trim().replace(/^["']+|["']+$/g, ""));
+  } catch {
+    return undefined;
+  }
+}
+
 export const metadata: Metadata = {
-  title: process.env.NEXT_PUBLIC_BRAND ?? "Biriani ya Ijumaa",
-  description: "Oda biriani hadi Alhamisi, tunakuletea Ijumaa mchana.",
+  metadataBase: siteUrl(),
+  title: brand,
+  description,
+  applicationName: brand,
+  appleWebApp: { capable: true, title: brand, statusBarStyle: "default" },
+  openGraph: { title: brand, description, siteName: brand, type: "website", locale: "sw_TZ" },
+  twitter: { card: "summary_large_image", title: brand, description },
 };
 export const viewport: Viewport = {
   themeColor: "#c2410c",

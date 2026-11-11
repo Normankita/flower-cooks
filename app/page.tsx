@@ -1,4 +1,5 @@
 import Link from "next/link";
+import InstallPrompt from "@/components/InstallPrompt";
 import OrderForm from "@/components/OrderForm";
 import { cycleMode, getCurrentCycle, getMenu, getOffices, portionsTaken } from "@/lib/data";
 import { fill, getLang, strings } from "@/lib/i18n";
@@ -37,6 +38,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
         </div>
         <p className="text-stone-600">{t.tagline}</p>
       </header>
+
+      <InstallPrompt t={t} />
 
       {cycle && (mode === "open" || mode === "late") && (
         <div className="card grid grid-cols-2 gap-3 text-sm">

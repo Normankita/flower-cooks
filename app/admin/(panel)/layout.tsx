@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { logoutAction } from "../actions";
 
 export const dynamic = "force-dynamic";
+export const metadata = { robots: { index: false, follow: false } };
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
