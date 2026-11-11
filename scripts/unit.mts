@@ -7,6 +7,7 @@ import { isNetworkMessage, RETRY_DELAYS_S } from "../lib/db-error.ts";
 import { normalizeSupabaseUrl } from "../lib/supabase-url.ts";
 import { csvCell, toCsv } from "../lib/csv.ts";
 import { resolveTheme } from "../lib/theme.ts";
+import { lockState } from "../lib/lockout.ts";
 
 // phones
 assert.equal(normalizePhone("0712 345 678"), "255712345678");
@@ -55,6 +56,25 @@ assert.equal(cycleMode(cyc, new Date("2026-11-10T00:00:00Z")), "open");
 assert.equal(cycleMode(cyc, new Date("2026-11-12T18:00:00Z")), "late");
 assert.equal(cycleMode(cyc, new Date("2026-11-13T10:00:00Z")), "closed");
 assert.equal(cycleMode({ ...cyc, status: "closed" }, new Date("2026-11-10T00:00:00Z")), "closed");
+// login lockout
+const T = Date.parse("2026-11-12T10:00:00Z");
+const min = (n: number) => n * 60_000;
+assert.deepEqual(lockState([], T), { locked: false, failures: 0, left: 5, minutes: 0 });
+assert.equal(lockState([T - min(1), T - min(2), T - min(3), T - min(4)], T).locked, false);
+assert.equal(lockState([T - min(1), T - min(2), T - min(3), T - min(4)], T).left, 1);
+const five = [T - min(5), T - min(4), T - min(3), T - min(2), T - min(1)];
+assert.equal(lockState(five, T).locked, true);
+assert.equal(lockState(five, T).minutes, 29); // lock ends 30 min after the LAST failure (1 min ago)
+assert.equal(lockState(five, T + min(28)).locked, true); // still locked 1 min before the end...
+assert.equal(lockState(five, T + min(28)).minutes, 1);
+assert.equal(lockState(five, T + min(29)).locked, false); // ...and over exactly 30 min after the last failure
+assert.equal(lockState(five, T + min(29)).left, 5); // fresh start afterwards
+// a slow burst (first failure 29 min before the last) is still a lock, and the old failure expiring can't lift it early
+const slow = [T - min(29), T - min(4), T - min(3), T - min(2), T - min(1)];
+assert.equal(lockState(slow, T).locked, true);
+assert.equal(lockState(slow, T + min(1)).locked, true); // first failure is now 30 min old; lock must hold
+assert.equal(lockState([T - min(40), T - min(35), T - min(31), T - min(2), T - min(1)], T).locked, false); // old failures don't count
+assert.equal(lockState([T - min(40), T - min(35), T - min(31), T - min(2), T - min(1)], T).left, 3);
 // theme
 assert.equal(resolveTheme("dark", false), "dark");
 assert.equal(resolveTheme("light", true), "light");

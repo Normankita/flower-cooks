@@ -1,6 +1,8 @@
 import Link from "next/link";
 import CopyButton from "@/components/CopyButton";
 import CycleSwitcher from "@/components/CycleSwitcher";
+import InstallPrompt from "@/components/InstallPrompt";
+import { strings } from "@/lib/i18n";
 import SubmitButton from "@/components/SubmitButton";
 import ToastForm from "@/components/ToastForm";
 import { cycleMode, getMenu, getOrders, getRecentCycles, selectCycle } from "@/lib/data";
@@ -44,6 +46,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-4">
+      <InstallPrompt
+        t={strings("sw")}
+        dismissKey="bo_install_dismissed_admin"
+        title="Weka Admin kwenye simu"
+        body="Fungua moja kwa moja, bila kuandika anwani."
+      />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <CycleSwitcher cycles={cycles} current={cycle.id} />
         <ToastForm action={createCycle} success="Mzunguko mpya umeundwa ✓"><SubmitButton className="btn-ghost btn-sm">+ Mzunguko mpya</SubmitButton></ToastForm>

@@ -1,12 +1,13 @@
 import { ImageResponse } from "next/og";
 import { brandIconSvg, svgDataUri } from "@/lib/brand-icon";
 
-/** PNG icons for the web manifest: /pwa-icon?size=192|512[&maskable=1] */
+/** PNG icons for the web manifests: /pwa-icon?size=180|192|512[&maskable=1][&admin=1] (admin = lock badge) */
 export function GET(req: Request) {
   const q = new URL(req.url).searchParams;
-  const size = q.get("size") === "512" ? 512 : 192;
+  const n = Number(q.get("size"));
+  const size = n === 180 || n === 512 ? n : 192;
   const maskable = q.has("maskable");
-  const svg = brandIconSvg({ size, rounded: !maskable, safe: maskable });
+  const svg = brandIconSvg({ size, rounded: !maskable && size !== 180, safe: maskable, badge: q.has("admin") });
   return new ImageResponse(
     (
       // eslint-disable-next-line @next/next/no-img-element

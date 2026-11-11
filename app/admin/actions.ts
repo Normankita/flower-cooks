@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { checkPin, createSession, destroySession, requireAdmin } from "@/lib/auth";
+import { clearFailures, clientIp, getLockState, recordFailure } from "@/lib/login-guard";
 import { db } from "@/lib/supabase";
 import { getCurrentCycle } from "@/lib/data";
 import { createOrder, parseOrderForm } from "@/lib/orders";
@@ -26,11 +27,21 @@ const finish = (error: { message: string } | null): ActionResult => {
 
 /* ---------- auth ---------- */
 export async function loginAction(fd: FormData) {
-  const ok = checkPin(str(fd, "pin"));
-  if (!ok) {
+  const ip = await clientIp();
+
+  // Locked IPs are refused BEFORE the PIN is checked, so guessing while locked reveals nothing.
+  const before = await getLockState(ip);
+  if (before.locked) redirect(`/admin/login?e=locked&m=${before.minutes}`);
+
+  if (!checkPin(str(fd, "pin"))) {
     await new Promise((r) => setTimeout(r, 1000)); // slow down guessing
-    redirect("/admin/login?e=1");
+    await recordFailure(ip);
+    const after = await getLockState(ip);
+    if (after.locked) redirect(`/admin/login?e=locked&m=${after.minutes}`);
+    redirect(`/admin/login?e=1&left=${after.left}`);
   }
+
+  await clearFailures(ip);
   await createSession();
   redirect("/admin");
 }

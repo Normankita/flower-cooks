@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
+import StaffLink from "@/components/StaffLink";
 import SuccessMark from "@/components/SuccessMark";
 import ToastForm from "@/components/ToastForm";
 import { getCycle, getOrder } from "@/lib/data";
@@ -133,6 +134,7 @@ export default async function OrderPage({
           <SubmitButton className="btn-red">{t.cancelOrder}</SubmitButton>
         </ToastForm>
       )}
+      <StaffLink label={t.staffLink} />
     </main>
   );
 }

@@ -5,11 +5,11 @@ import type { Dict } from "@/lib/i18n";
 
 type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 
-const DISMISS_KEY = "bo_install_dismissed";
+const DEFAULT_DISMISS_KEY = "bo_install_dismissed";
 const DISMISS_DAYS = 14;
 
 /** "ios" | "standalone" | "dismissed" | "other" — a primitive so useSyncExternalStore stays stable. */
-function envSnapshot(): string {
+function envSnapshot(DISMISS_KEY: string): string {
   if (typeof window === "undefined") return "other";
   const standalone =
     window.matchMedia("(display-mode: standalone)").matches ||
@@ -30,8 +30,20 @@ const subscribe = () => () => {};
  * iPhone/iPad: no prompt exists, so show the "Share → Add to Home Screen" hint.
  * Hidden when already installed, or for 14 days after the user closes it.
  */
-export default function InstallPrompt({ t }: { t: Dict }) {
-  const env = useSyncExternalStore(subscribe, envSnapshot, () => "other");
+export default function InstallPrompt({
+  t,
+  title,
+  body,
+  dismissKey = DEFAULT_DISMISS_KEY,
+}: {
+  t: Dict;
+  /** override the card text (the admin install card uses its own wording) */
+  title?: string;
+  body?: string;
+  /** separate key per app, so closing one card doesn't hide the other */
+  dismissKey?: string;
+}) {
+  const env = useSyncExternalStore(subscribe, () => envSnapshot(dismissKey), () => "other");
   const [evt, setEvt] = useState<InstallEvent | null>(null);
   const [hidden, setHidden] = useState(false);
 
@@ -54,7 +66,7 @@ export default function InstallPrompt({ t }: { t: Dict }) {
 
   const close = () => {
     try {
-      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      localStorage.setItem(dismissKey, String(Date.now()));
     } catch {}
     setHidden(true);
   };
@@ -66,9 +78,9 @@ export default function InstallPrompt({ t }: { t: Dict }) {
     <div className="card flex items-center gap-3 p-3!" role="region" aria-label={t.installTitle}>
       <span className="text-2xl" aria-hidden>📲</span>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold">{t.installTitle}</div>
+        <div className="text-sm font-semibold">{title ?? t.installTitle}</div>
         {evt ? (
-          <div className="text-xs text-stone-600">{t.installBody}</div>
+          <div className="text-xs text-stone-600">{body ?? t.installBody}</div>
         ) : (
           <div className="text-xs text-stone-600">{t.installIos}</div>
         )}

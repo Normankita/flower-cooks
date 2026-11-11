@@ -1,5 +1,6 @@
 import Link from "next/link";
 import InstallPrompt from "@/components/InstallPrompt";
+import StaffLink from "@/components/StaffLink";
 import OrderForm from "@/components/OrderForm";
 import ThemeSuggest from "@/components/ThemeSuggest";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -88,6 +89,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
           successText={mode === "late" ? t.lateSent : t.orderSent}
         />
       )}
+      <StaffLink label={t.staffLink} />
     </main>
   );
 }

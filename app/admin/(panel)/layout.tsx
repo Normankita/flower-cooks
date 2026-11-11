@@ -1,3 +1,4 @@
+import Link from "next/link";
 import AdminNav from "@/components/AdminNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import { requireAdmin } from "@/lib/auth";
@@ -16,6 +17,15 @@ export default async function PanelLayout({ children }: { children: React.ReactN
           <span>{process.env.NEXT_PUBLIC_BRAND ?? "Biriani ya Ijumaa"}</span>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            target="_blank"
+            aria-label="Tazama ukurasa wa wateja"
+            title="Tazama ukurasa wa wateja"
+            className="glass inline-flex h-9 w-9 items-center justify-center rounded-full text-lg transition hover:scale-105 active:scale-90"
+          >
+            <span aria-hidden>🛍️</span>
+          </Link>
           <ThemeToggle />
           <form action={logoutAction}>
             <button className="rounded-full px-3 py-1.5 text-sm font-medium text-stone-600 transition hover:bg-(--glass)">Toka</button>
