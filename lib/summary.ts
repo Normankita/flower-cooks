@@ -31,5 +31,8 @@ export function summarize(orders: Order[]) {
   };
 }
 
-export const linesText = (o: Order) =>
+/** Where the order goes, for admin lists: the office name, or "Nyumbani" for home deliveries. */
+export const placeName = (o: Order) => (o.delivery_type === "home" ? "🏠 Nyumbani" : o.offices?.name ?? "");
+
+export const linesText =(o: Order) =>
   o.order_lines.map((l) => `${l.qty}× ${l.menu_items?.name ?? "?"}`).join(", ");

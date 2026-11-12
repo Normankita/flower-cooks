@@ -1,7 +1,8 @@
 import { db } from "./supabase";
 import { normalizePhone } from "./phone";
-import { getMenu, must, portionsTaken } from "./data";
+import { getMenu, homeStopsTaken, must, portionsTaken } from "./data";
 import { DbUnavailableError, isNetworkMessage } from "./db-error";
+import { haversineKm, parseHome, type HomeLocation } from "./geo";
 import type { Cycle } from "./types";
 
 export type OrderErrorCode =
@@ -10,6 +11,11 @@ export type OrderErrorCode =
   | "errItems"
   | "errTooMany"
   | "errCapacity"
+  | "errLandmark"
+  | "errLocation"
+  | "errHomeOff"
+  | "errHomeFull"
+  | "errTooFar"
   | "errNetwork"
   | "errGeneric";
 
@@ -31,6 +37,8 @@ export type ParsedOrder = {
   lines: { itemId: string; qty: number }[];
   /** Client-generated UUID so a retried submit can never create a second order. */
   idemKey: string | null;
+  /** Set when delivering to the customer's home (officeId is then null; deliveryNote is the landmark). */
+  home: HomeLocation | null;
 };
 
 export function parseOrderForm(
@@ -56,12 +64,27 @@ export function parseOrderForm(
     const s = String(fd.get(k) ?? "").trim().slice(0, max);
     return s || null;
   };
+
+  let home: HomeLocation | null = null;
+  if (office === "home") {
+    const h = parseHome({
+      lat: String(fd.get("delivery_lat") ?? ""),
+      lng: String(fd.get("delivery_lng") ?? ""),
+      accuracy: String(fd.get("delivery_accuracy") ?? ""),
+      link: String(fd.get("location_url") ?? ""),
+      landmark: clean("delivery_note", 160),
+    });
+    if (!h.ok) return { ok: false, code: h.code };
+    home = h.home;
+  }
+
   return {
     ok: true,
     value: {
       name,
       phone,
-      officeId: office || null,
+      officeId: home ? null : office || null,
+      home,
       deliveryNote: clean("delivery_note", 160),
       notes: clean("notes", 300),
       paymentMethod: fd.get("payment_method") === "cash" ? "cash" : "lipa",
@@ -122,6 +145,23 @@ async function createOrderInner(
   const price = new Map(menu.map((m) => [m.id, m.price]));
   if (p.lines.some((l) => !price.has(l.itemId))) return { ok: false, code: "errItems" };
 
+  // Home delivery rules (the cook can still enter anything herself in "admin" mode).
+  if (p.home && mode !== "admin") {
+    if (!cycle.home_enabled) return { ok: false, code: "errHomeOff" };
+    if (cycle.home_max_stops != null && (await homeStopsTaken(cycle.id)) >= cycle.home_max_stops) {
+      return { ok: false, code: "errHomeFull" };
+    }
+    // The distance limit can only be checked when we know both points; text-only locations are left to the cook.
+    if (
+      cycle.home_max_km != null &&
+      cycle.kitchen_lat != null && cycle.kitchen_lng != null &&
+      p.home.lat != null && p.home.lng != null &&
+      haversineKm({ lat: cycle.kitchen_lat, lng: cycle.kitchen_lng }, { lat: p.home.lat, lng: p.home.lng }) > cycle.home_max_km
+    ) {
+      return { ok: false, code: "errTooFar", n: cycle.home_max_km };
+    }
+  }
+
   const qty = p.lines.reduce((s, l) => s + l.qty, 0);
   if (mode === "open") {
     const taken = await portionsTaken(cycle.id);
@@ -130,9 +170,13 @@ async function createOrderInner(
   }
 
   const sb = db();
+  // Don't overwrite the customer's saved office when they order for home.
   const { data: cust, error: ce } = await sb
     .from("customers")
-    .upsert({ phone: p.phone, name: p.name, office_id: p.officeId }, { onConflict: "phone" })
+    .upsert(
+      p.officeId ? { phone: p.phone, name: p.name, office_id: p.officeId } : { phone: p.phone, name: p.name },
+      { onConflict: "phone" },
+    )
     .select("id")
     .single();
   if (ce || !cust) return { ok: false, code: ce ? failCode(ce) : "errGeneric" };
@@ -144,6 +188,11 @@ async function createOrderInner(
       cycle_id: cycle.id,
       customer_id: cust.id,
       office_id: p.officeId,
+      delivery_type: p.home ? "home" : "office",
+      delivery_lat: p.home?.lat ?? null,
+      delivery_lng: p.home?.lng ?? null,
+      delivery_accuracy_m: p.home?.accuracyM ?? null,
+      location_url: p.home?.url ?? null,
       delivery_note: p.deliveryNote,
       notes: p.notes,
       status: mode === "late" ? "late_request" : "confirmed",

@@ -73,7 +73,7 @@ export default async function OrderPage({
           <span>{tzs(order.total)}</span>
         </div>
         <div className="text-sm text-stone-600">
-          📍 {order.offices?.name}
+          {order.delivery_type === "home" ? `🏠 ${t.homeOption}` : `📍 ${order.offices?.name ?? ""}`}
           {order.delivery_note ? ` · ${order.delivery_note}` : ""}
         </div>
       </section>

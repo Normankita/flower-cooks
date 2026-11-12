@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import HomeLocation, { type Loc } from "./HomeLocation";
 import SubmitButton from "./SubmitButton";
 import { useToast } from "./Toaster";
 import { fill, type Dict } from "@/lib/i18n";
@@ -24,6 +25,9 @@ export default function OrderForm({
   successText,
   remember = true,
   sticky = true,
+  homeEnabled = false,
+  homeFull = false,
+  homeGps = true,
 }: {
   action: (s: State, fd: FormData) => Promise<State>;
   cycleId: string;
@@ -37,6 +41,12 @@ export default function OrderForm({
   remember?: boolean;
   /** Pin the total + submit button to the bottom of the screen (public form on phones). */
   sticky?: boolean;
+  /** Offer "deliver to my home" in the places list (the cook switches it per cycle). */
+  homeEnabled?: boolean;
+  /** Home stops are used up for this cycle: option is shown but disabled. */
+  homeFull?: boolean;
+  /** Offer the "use my GPS" button (off in the cook's manual-entry form). */
+  homeGps?: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -56,6 +66,9 @@ export default function OrderForm({
   const [note, setNote] = useState("");
   const [pay, setPay] = useState<"lipa" | "cash">("lipa");
   const [qty, setQty] = useState<Record<string, number>>({});
+  const [loc, setLoc] = useState<Loc | null>(null);
+  const [link, setLink] = useState("");
+  const isHome = office === "home";
 
   // Returning customers: prefill from this device.
   useEffect(() => {
@@ -66,7 +79,11 @@ export default function OrderForm({
       /* eslint-disable react-hooks/set-state-in-effect */
       setName(s.name ?? "");
       setPhone(s.phone ?? "");
-      setOffice(offices.some((o) => o.id === s.office) ? s.office : "");
+      setOffice(offices.some((o) => o.id === s.office) || (s.office === "home" && homeEnabled && !homeFull) ? s.office : "");
+      if (Number.isFinite(s.loc?.lat) && Number.isFinite(s.loc?.lng)) {
+        setLoc({ lat: s.loc.lat, lng: s.loc.lng, acc: s.loc.acc ?? null, saved: true });
+      }
+      if (typeof s.link === "string") setLink(s.link);
       setNote(s.note ?? "");
       if (s.pay === "cash" || s.pay === "lipa") setPay(s.pay);
       const q: Record<string, number> = {};
@@ -74,7 +91,7 @@ export default function OrderForm({
       setQty(q);
       /* eslint-enable react-hooks/set-state-in-effect */
     } catch {}
-  }, [remember, offices, items]);
+  }, [remember, offices, items, homeEnabled, homeFull]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -125,7 +142,7 @@ export default function OrderForm({
         clearTimeout(timer.current);
         if (!remember) return;
         try {
-          localStorage.setItem(KEY, JSON.stringify({ name, phone, office, note, pay, qty }));
+          localStorage.setItem(KEY, JSON.stringify({ name, phone, office, note, pay, qty, loc, link }));
         } catch {}
       }}
     >
@@ -177,11 +194,26 @@ export default function OrderForm({
             {offices.map((o) => (
               <option key={o.id} value={o.id}>{o.name}</option>
             ))}
+            {homeEnabled && (
+              <option value="home" disabled={homeFull}>
+                🏠 {t.homeOption}{homeFull ? ` ${t.homeFullTag}` : ""}
+              </option>
+            )}
           </select>
         </div>
+        {isHome && <HomeLocation t={t} allowGps={homeGps} loc={loc} setLoc={setLoc} link={link} setLink={setLink} />}
         <div>
-          <label className="label" htmlFor="delivery_note">{t.deliveryNote}</label>
-          <input id="delivery_note" name="delivery_note" className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+          <label className="label" htmlFor="delivery_note">{isHome ? t.homeNoteLabel : t.deliveryNote}</label>
+          <input
+            id="delivery_note"
+            name="delivery_note"
+            className="input"
+            placeholder={isHome ? t.homeNoteHint : undefined}
+            required={isHome}
+            minLength={isHome ? 3 : undefined}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
         </div>
       </section>
 

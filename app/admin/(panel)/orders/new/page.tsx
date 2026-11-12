@@ -24,6 +24,8 @@ export default async function NewOrder() {
         successText="Oda imewekwa ✓"
         remember={false}
         sticky={false}
+        homeEnabled
+        homeGps={false}
       />
     </div>
   );

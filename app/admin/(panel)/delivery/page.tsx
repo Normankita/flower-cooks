@@ -1,7 +1,9 @@
 import CycleSwitcher from "@/components/CycleSwitcher";
+import HomeStop, { orderPoint } from "@/components/HomeStop";
 import SubmitButton from "@/components/SubmitButton";
 import ToastForm from "@/components/ToastForm";
 import { ORDER_SELECT, getOrders, getRecentCycles, selectCycle } from "@/lib/data";
+import { orderStops, routeUrls, type LatLng } from "@/lib/geo";
 import { displayPhone } from "@/lib/phone";
 import { linesText } from "@/lib/summary";
 import { db } from "@/lib/supabase";
@@ -21,11 +23,25 @@ export default async function DeliveryPage({ searchParams }: { searchParams: Pro
   ]);
 
   const route = orders.filter((o) => o.status === "confirmed" || o.status === "delivered");
+  const kitchen: LatLng | null =
+    cycle.kitchen_lat != null && cycle.kitchen_lng != null ? { lat: Number(cycle.kitchen_lat), lng: Number(cycle.kitchen_lng) } : null;
+
+  // Office stops: grouped by office. Home stops: their own section, nearest-first from the kitchen.
   const groups = new Map<string, Order[]>();
-  for (const o of route) {
+  for (const o of route.filter((o) => o.delivery_type !== "home")) {
     const k = o.offices?.name ?? "Bila eneo";
     groups.set(k, [...(groups.get(k) ?? []), o]);
   }
+  const homes = route.filter((o) => o.delivery_type === "home");
+  const todo = homes.filter((o) => o.status === "confirmed");
+  const located = todo.filter((o) => orderPoint(o));
+  const unlocated = todo.filter((o) => !orderPoint(o));
+  const ordered = kitchen
+    ? orderStops(kitchen, located.map((o) => ({ at: orderPoint(o)!, item: o }))).map((s) => s.item)
+    : located;
+  const homeList = [...ordered, ...unlocated, ...homes.filter((o) => o.status === "delivered")];
+  const routeLinks = routeUrls(kitchen, ordered.map((o) => orderPoint(o)!));
+
   const toCollect = route.filter((o) => o.payment_status !== "paid").reduce((s, o) => s + o.total, 0);
 
   // Debts across all cycles, grouped by customer
@@ -39,6 +55,55 @@ export default async function DeliveryPage({ searchParams }: { searchParams: Pro
   }
   const debtList = [...debts.values()].sort((a, b) => b.total - a.total);
 
+  const card = (o: Order, stopNo?: number) => {
+    const done = o.status === "delivered";
+    const reviewMsg = `Asante kwa kuagiza biriani! 🍛 Ilikuwaje? Tupe maoni yako (sekunde 10): ${site}/r/${o.review_token}`;
+    return (
+      <div key={o.id} className={`card space-y-2 ${done && o.payment_status === "paid" ? "opacity-60" : ""}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="font-semibold">
+              {stopNo != null && <span className="mr-1.5 inline-grid h-6 w-6 place-items-center rounded-full bg-orange-700 text-xs font-bold text-white">{stopNo}</span>}
+              {o.customers?.name}
+            </div>
+            <a className="text-sm text-orange-700 underline" href={`tel:+${o.customers?.phone}`}>{displayPhone(o.customers?.phone ?? "")}</a>
+            {o.delivery_note && <div className="text-sm text-stone-600">{o.delivery_type === "home" ? "📌 " : ""}{o.delivery_note}</div>}
+          </div>
+          <div className="text-right">
+            <div className="text-sm">{linesText(o)}</div>
+            {o.payment_status === "paid" ? (
+              <span className="badge bg-green-100 text-green-800">Imelipwa</span>
+            ) : (
+              <div className="font-bold text-red-700">Kusanya {tzs(o.total)}</div>
+            )}
+          </div>
+        </div>
+        {o.delivery_type === "home" && !done && <HomeStop o={o} kitchen={kitchen} />}
+        <div className="flex flex-wrap gap-2">
+          {!done && (
+            <ToastForm action={setOrderStatus} success="Imewekwa kuwa imeletwa ✓">
+              <input type="hidden" name="order_id" value={o.id} />
+              <input type="hidden" name="status" value="delivered" />
+              <SubmitButton className="btn-green">Imeletwa</SubmitButton>
+            </ToastForm>
+          )}
+          {o.payment_status !== "paid" && (
+            <ToastForm action={setPayment} success="Malipo yamehifadhiwa ✓">
+              <input type="hidden" name="order_id" value={o.id} />
+              <input type="hidden" name="paid" value="1" />
+              <SubmitButton className="btn-green">Amelipa ✓</SubmitButton>
+            </ToastForm>
+          )}
+          {done && (
+            <a className="btn-ghost btn-sm" target="_blank" href={`https://wa.me/${o.customers?.phone}?text=${encodeURIComponent(reviewMsg)}`}>
+              Omba maoni (WhatsApp)
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-5">
       <CycleSwitcher cycles={cycles} current={cycle.id} />
@@ -50,52 +115,33 @@ export default async function DeliveryPage({ searchParams }: { searchParams: Pro
       {[...groups.entries()].map(([office, list]) => (
         <section key={office} className="space-y-2">
           <h2 className="font-semibold text-orange-800">📍 {office} ({list.length})</h2>
-          {list.map((o) => {
-            const done = o.status === "delivered";
-            const reviewMsg = `Asante kwa kuagiza biriani! 🍛 Ilikuwaje? Tupe maoni yako (sekunde 10): ${site}/r/${o.review_token}`;
-            return (
-              <div key={o.id} className={`card space-y-2 ${done && o.payment_status === "paid" ? "opacity-60" : ""}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="font-semibold">{o.customers?.name}</div>
-                    <a className="text-sm text-orange-700 underline" href={`tel:+${o.customers?.phone}`}>{displayPhone(o.customers?.phone ?? "")}</a>
-                    {o.delivery_note && <div className="text-sm text-stone-600">{o.delivery_note}</div>}
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm">{linesText(o)}</div>
-                    {o.payment_status === "paid" ? (
-                      <span className="badge bg-green-100 text-green-800">Imelipwa</span>
-                    ) : (
-                      <div className="font-bold text-red-700">Kusanya {tzs(o.total)}</div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {!done && (
-                    <ToastForm action={setOrderStatus} success="Imewekwa kuwa imeletwa ✓">
-                      <input type="hidden" name="order_id" value={o.id} />
-                      <input type="hidden" name="status" value="delivered" />
-                      <SubmitButton className="btn-green">Imeletwa</SubmitButton>
-                    </ToastForm>
-                  )}
-                  {o.payment_status !== "paid" && (
-                    <ToastForm action={setPayment} success="Malipo yamehifadhiwa ✓">
-                      <input type="hidden" name="order_id" value={o.id} />
-                      <input type="hidden" name="paid" value="1" />
-                      <SubmitButton className="btn-green">Amelipa ✓</SubmitButton>
-                    </ToastForm>
-                  )}
-                  {done && (
-                    <a className="btn-ghost btn-sm" target="_blank" href={`https://wa.me/${o.customers?.phone}?text=${encodeURIComponent(reviewMsg)}`}>
-                      Omba maoni (WhatsApp)
-                    </a>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {list.map((o) => card(o))}
         </section>
       ))}
+
+      {homes.length > 0 && (
+        <section className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold text-orange-800">🏠 Nyumbani ({homes.length})</h2>
+            {routeLinks.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {routeLinks.map((u, i) => (
+                  <a key={u} className="btn btn-sm" href={u} target="_blank" rel="noopener noreferrer">
+                    🗺️ Anza safari{routeLinks.length > 1 ? ` ${i + 1}` : ""}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-stone-500">
+            {kitchen
+              ? "Vituo vimepangwa kuanzia karibu na jiko (umbali ni wa mstari wa moja kwa moja, si barabara)."
+              : "Weka eneo la jiko kwenye Mipangilio ili kuona umbali na kupanga safari."}
+            {unlocated.length > 0 && ` Vituo ${unlocated.length} havina ramani — tumia maelezo au piga simu.`}
+          </p>
+          {homeList.map((o) => card(o, ordered.indexOf(o) >= 0 ? ordered.indexOf(o) + 1 : undefined))}
+        </section>
+      )}
       {route.length === 0 && <p className="text-sm text-stone-500">Hakuna oda za kuleta bado.</p>}
 
       <section className="space-y-2">

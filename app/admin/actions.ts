@@ -10,6 +10,7 @@ import { createOrder, parseOrderForm } from "@/lib/orders";
 import { nextWeekdayEAT, parseEATInput } from "@/lib/time";
 import { strings } from "@/lib/i18n";
 import { DbUnavailableError } from "@/lib/db-error";
+import { inTanzania } from "@/lib/geo";
 import { fail, fromDb, type ActionResult } from "@/lib/result";
 
 type FormState = { error?: string; retry?: boolean; redirectTo?: string };
@@ -112,7 +113,22 @@ export async function createCycle(): Promise<ActionResult> {
     capacity: prev?.capacity ?? 60,
     lipa_namba: prev?.lipa_namba ?? null,
     status: "open",
+    // home-delivery settings carry over from the previous cycle
+    home_enabled: prev?.home_enabled ?? false,
+    home_max_stops: prev?.home_max_stops ?? null,
+    home_max_km: prev?.home_max_km ?? null,
+    kitchen_lat: prev?.kitchen_lat ?? null,
+    kitchen_lng: prev?.kitchen_lng ?? null,
   });
+
+  // Privacy: forget customers' home locations 30 days after the order (best effort; ignore failures).
+  if (!error) {
+    await db()
+      .from("orders")
+      .update({ delivery_lat: null, delivery_lng: null, delivery_accuracy_m: null, location_url: null })
+      .eq("delivery_type", "home")
+      .lt("created_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
+  }
   return finish(error);
 }
 
@@ -128,6 +144,21 @@ export async function saveCycle(fd: FormData): Promise<ActionResult> {
   const closes = parseEATInput(str(fd, "closes_at"));
   const delivery = parseEATInput(str(fd, "delivery_at"));
   if (!closes || !delivery) return fail("Tarehe si sahihi.");
+
+  // Home delivery controls. Empty limit = no limit. Kitchen position: both numbers inside Tanzania, or both empty.
+  const stopsRaw = str(fd, "home_max_stops");
+  const kmRaw = str(fd, "home_max_km");
+  const km = Number(kmRaw);
+  const latRaw = str(fd, "kitchen_lat");
+  const lngRaw = str(fd, "kitchen_lng");
+  let kitchen: { lat: number; lng: number } | null = null;
+  if (latRaw || lngRaw) {
+    kitchen = { lat: Number(latRaw), lng: Number(lngRaw) };
+    if (!latRaw || !lngRaw || !Number.isFinite(kitchen.lat) || !Number.isFinite(kitchen.lng) || !inTanzania(kitchen)) {
+      return fail("Eneo la jiko si sahihi (lazima liwe ndani ya Tanzania).");
+    }
+  }
+
   const { error } = await db()
     .from("cycles")
     .update({
@@ -136,6 +167,11 @@ export async function saveCycle(fd: FormData): Promise<ActionResult> {
       delivery_at: delivery.toISOString(),
       capacity: Math.max(1, int(fd, "capacity", 60)),
       lipa_namba: str(fd, "lipa_namba").slice(0, 20) || null,
+      home_enabled: fd.get("home_enabled") === "on",
+      home_max_stops: stopsRaw ? Math.min(Math.max(0, int(fd, "home_max_stops")), 500) : null,
+      home_max_km: kmRaw && Number.isFinite(km) && km > 0 ? Math.min(Math.round(km * 10) / 10, 999) : null,
+      kitchen_lat: kitchen ? Math.round(kitchen.lat * 1e6) / 1e6 : null,
+      kitchen_lng: kitchen ? Math.round(kitchen.lng * 1e6) / 1e6 : null,
     })
     .eq("id", str(fd, "cycle_id"));
   return finish(error);

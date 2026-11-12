@@ -15,6 +15,10 @@ export type ExportOrder = {
   created_at: string;
   delivered_at: string | null;
   paid_at: string | null;
+  delivery_type: string;
+  delivery_lat: number | null;
+  delivery_lng: number | null;
+  location_url: string | null;
   cycles: { title: string; delivery_at: string } | null;
   customers: { name: string; phone: string } | null;
   offices: { name: string } | null;
@@ -23,6 +27,7 @@ export type ExportOrder = {
 
 const SELECT =
   "id,status,payment_method,payment_status,payment_ref,total,notes,delivery_note,created_at,delivered_at,paid_at," +
+  "delivery_type,delivery_lat,delivery_lng,location_url," +
   "cycles(title,delivery_at),customers(name,phone),offices(name)," +
   "order_lines(qty,unit_price,menu_items(name))";
 
@@ -68,6 +73,8 @@ const phone = (p: string | undefined) => {
   const d = p.startsWith("255") ? "0" + p.slice(3) : p;
   return d.length === 10 ? `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}` : d;
 };
+/** Office name, or "Nyumbani" for home deliveries. */
+const place = (o: ExportOrder) => (o.delivery_type === "home" ? "Nyumbani" : o.offices?.name);
 const items = (o: ExportOrder) => o.order_lines.map((l) => `${l.qty}× ${l.menu_items?.name ?? "?"}`).join(", ");
 const portions = (o: ExportOrder) => o.order_lines.reduce((s, l) => s + l.qty, 0);
 
@@ -76,7 +83,7 @@ export function ordersCsv(orders: ExportOrder[]): string {
     [
       "Namba ya oda", "Mzunguko", "Tarehe ya kuleta", "Oda ilipowekwa", "Jina", "Simu", "Ofisi", "Maelezo ya kuleta",
       "Vyakula", "Idadi", "Jumla (TSh)", "Hali", "Njia ya malipo", "Hali ya malipo", "Namba ya muamala",
-      "Imeletwa lini", "Imelipwa lini", "Maombi maalum",
+      "Imeletwa lini", "Imelipwa lini", "Maombi maalum", "Latitudo", "Longitudo", "Kiungo cha ramani",
     ],
   ];
   for (const o of orders) {
@@ -87,7 +94,7 @@ export function ordersCsv(orders: ExportOrder[]): string {
       stamp(o.created_at),
       o.customers?.name,
       phone(o.customers?.phone),
-      o.offices?.name,
+      place(o),
       o.delivery_note,
       items(o),
       portions(o),
@@ -99,6 +106,9 @@ export function ordersCsv(orders: ExportOrder[]): string {
       stamp(o.delivered_at),
       stamp(o.paid_at),
       o.notes,
+      o.delivery_lat,
+      o.delivery_lng,
+      o.location_url,
     ]);
   }
   return toCsv(rows);
@@ -117,7 +127,7 @@ export function debtsCsv(orders: ExportOrder[]): string {
     rows.push([
       o.customers?.name,
       phone(o.customers?.phone),
-      o.offices?.name,
+      place(o),
       o.cycles?.title,
       stamp(o.delivered_at),
       items(o),

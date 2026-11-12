@@ -4,7 +4,9 @@ import SubmitButton from "@/components/SubmitButton";
 import ToastForm from "@/components/ToastForm";
 import { getOrders, getRecentCycles, selectCycle } from "@/lib/data";
 import { displayPhone } from "@/lib/phone";
-import { linesText } from "@/lib/summary";
+import HomeStop from "@/components/HomeStop";
+import type { LatLng } from "@/lib/geo";
+import { linesText, placeName } from "@/lib/summary";
 import { tzs } from "@/lib/time";
 import type { Order } from "@/lib/types";
 import { setOrderStatus, setPayment } from "../../actions";
@@ -39,7 +41,7 @@ function StatusBtn({ id, status, label, cls }: { id: string; status: string; lab
   );
 }
 
-function Row({ o }: { o: Order }) {
+function Row({ o, kitchen }: { o: Order; kitchen: LatLng | null }) {
   const [sl, sc] = statusBadge[o.status];
   const [pl, pc] = payBadge[o.payment_status];
   const dead = o.status === "declined" || o.status === "cancelled";
@@ -49,7 +51,7 @@ function Row({ o }: { o: Order }) {
         <div>
           <div className="font-semibold">{o.customers?.name}</div>
           <a className="text-sm text-orange-700 underline" href={`tel:+${o.customers?.phone}`}>{displayPhone(o.customers?.phone ?? "")}</a>
-          <div className="text-sm text-stone-600">{o.offices?.name}{o.delivery_note ? ` · ${o.delivery_note}` : ""}</div>
+          <div className="text-sm text-stone-600">{placeName(o)}{o.delivery_note ? ` · ${o.delivery_note}` : ""}</div>
         </div>
         <div className="text-right">
           <div className="font-bold">{tzs(o.total)}</div>
@@ -57,7 +59,8 @@ function Row({ o }: { o: Order }) {
         </div>
       </div>
       <div className="text-sm">{linesText(o)}</div>
-      {o.notes && <div className="text-sm italic text-stone-600">“{o.notes}”</div>}
+      {o.delivery_type === "home" && !dead && <HomeStop o={o} kitchen={kitchen} />}
+      {o.notes &&<div className="text-sm italic text-stone-600">“{o.notes}”</div>}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className={`badge ${pc}`}>{pl}</span>
         <span className="text-stone-500">{o.payment_method === "lipa" ? "Lipa Namba" : "Cash"}</span>
@@ -96,6 +99,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const cycle = await selectCycle((await searchParams).c);
   if (!cycle) return <p className="card">Hakuna mzunguko.</p>;
   const [orders, cycles] = await Promise.all([getOrders(cycle.id), getRecentCycles()]);
+  const kitchen: LatLng | null =
+    cycle.kitchen_lat != null && cycle.kitchen_lng != null ? { lat: Number(cycle.kitchen_lat), lng: Number(cycle.kitchen_lng) } : null;
   const late = orders.filter((o) => o.status === "late_request");
   const rest = orders.filter((o) => o.status !== "late_request");
 
@@ -113,13 +118,13 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       {late.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-semibold text-orange-800">Maombi ya ziada ({late.length})</h2>
-          {late.map((o) => <Row key={o.id} o={o} />)}
+          {late.map((o) => <Row key={o.id} o={o} kitchen={kitchen} />)}
         </section>
       )}
       <section className="space-y-2">
         <h2 className="font-semibold">Oda ({rest.length})</h2>
         {rest.length === 0 && <p className="text-sm text-stone-500">Hakuna oda bado.</p>}
-        {rest.map((o) => <Row key={o.id} o={o} />)}
+        {rest.map((o) => <Row key={o.id} o={o} kitchen={kitchen} />)}
       </section>
     </div>
   );

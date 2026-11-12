@@ -11,6 +11,7 @@ the cook gets a cooking plan, delivery sheet, payment tracking and review collec
 - Cutoff + capacity: after the cutoff, orders become **late requests** the cook approves/declines. Sold-out when capacity is reached.
 - Confirmation page (`/order/[id]`): Lipa Namba + amount, customer can enter their transaction ID, cancel before cutoff, share to WhatsApp.
 - Review page (`/r/[token]`): 1–5 stars + comment, only after delivery.
+- **Home delivery (migration 0004):** a "🏠 Nyumbani" place in the dropdown. "Are you at home?" → one tap uses the phone GPS; otherwise paste a Google Maps / WhatsApp location link; a landmark description is always required. Coordinates must be inside Tanzania; pasted links are limited to known map hosts (the cook taps them). The cook controls it per cycle in *Mipangilio* (on/off, max stops, max km from the kitchen, kitchen position); the settings carry over to the next cycle. Delivery is free (no fee logic yet). Distances are **straight-line**, not road distance. Customer locations are erased 30 days after the order (done when a new cycle is created). Admin *Uletaji* has a "Nyumbani" section ordered nearest-first with 🧭 Nenda (Google Maps navigation) and a multi-stop "Anza safari" link.
 
 **Cook admin** (`/admin`, PIN login)
 - **Muhtasari:** cycle status, portions vs capacity, cooking plan (portions, kg rice, kg meat/chicken), money split paid / reported / unpaid, ready-made WhatsApp messages (open, reminder, last call).

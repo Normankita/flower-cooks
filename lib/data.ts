@@ -4,6 +4,7 @@ import type { Cycle, MenuItem, Office, Order } from "./types";
 
 export const ORDER_SELECT =
   "id,cycle_id,status,payment_method,payment_status,payment_ref,total,notes,delivery_note,review_token,delivered_at,created_at," +
+  "delivery_type,delivery_lat,delivery_lng,location_url," +
   "customers(id,name,phone),offices(id,name)," +
   "order_lines(id,qty,unit_price,item_id,menu_items(name,rice_kg,protein_kg))";
 
@@ -79,6 +80,18 @@ export async function portionsTaken(cycleId: string): Promise<number> {
     (s, o) => s + o.order_lines.reduce((a, l) => a + l.qty, 0),
     0,
   );
+}
+
+/** Home deliveries already accepted (confirmed + delivered) in a cycle — each one is its own stop. */
+export async function homeStopsTaken(cycleId: string): Promise<number> {
+  const res = await db()
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("cycle_id", cycleId)
+    .eq("delivery_type", "home")
+    .in("status", ["confirmed", "delivered"]);
+  must(res, "homeStopsTaken");
+  return res.count ?? 0;
 }
 
 export { cycleMode, type CycleMode } from "./cycle";

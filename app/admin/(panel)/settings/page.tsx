@@ -1,3 +1,4 @@
+import KitchenLocation from "@/components/KitchenLocation";
 import SubmitButton from "@/components/SubmitButton";
 import ToastForm from "@/components/ToastForm";
 import { getMenu, getOffices, getCurrentCycle } from "@/lib/data";
@@ -19,6 +20,29 @@ export default async function Settings() {
             <div><label className="label">Kuleta</label><input type="datetime-local" name="delivery_at" defaultValue={toEATInput(cycle.delivery_at)} className="input" required /></div>
             <div><label className="label">Kikomo cha biriani</label><input type="number" min={1} name="capacity" defaultValue={cycle.capacity} className="input" /></div>
             <div><label className="label">Lipa Namba</label><input name="lipa_namba" defaultValue={cycle.lipa_namba ?? ""} className="input" inputMode="numeric" /></div>
+          </div>
+
+          <div className="space-y-3 rounded-2xl bg-(--glass) p-3">
+            <h3 className="font-semibold">🏠 Kuleta nyumbani</h3>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="home_enabled" defaultChecked={cycle.home_enabled} className="h-4 w-4 accent-orange-700" />
+              Pokea oda za kuletewa nyumbani wiki hii
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label" htmlFor="home_max_stops">Idadi ya juu ya vituo</label>
+                <input id="home_max_stops" type="number" min={0} name="home_max_stops" defaultValue={cycle.home_max_stops ?? ""} placeholder="Bila kikomo" className="input" />
+              </div>
+              <div>
+                <label className="label" htmlFor="home_max_km">Umbali wa juu (km)</label>
+                <input id="home_max_km" type="number" min={0.5} step={0.5} name="home_max_km" defaultValue={cycle.home_max_km ?? ""} placeholder="Bila kikomo" className="input" />
+              </div>
+            </div>
+            <KitchenLocation lat={cycle.kitchen_lat} lng={cycle.kitchen_lng} />
+            <p className="text-xs text-stone-500">
+              Eneo la jiko linatumika kuonyesha umbali na kuzuia maeneo ya mbali (mstari wa moja kwa moja, si barabara).
+              Eneo la wateja hufutwa baada ya siku 30.
+            </p>
           </div>
           <SubmitButton>Hifadhi</SubmitButton>
         </ToastForm>

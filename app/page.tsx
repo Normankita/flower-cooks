@@ -4,7 +4,7 @@ import StaffLink from "@/components/StaffLink";
 import OrderForm from "@/components/OrderForm";
 import ThemeSuggest from "@/components/ThemeSuggest";
 import ThemeToggle from "@/components/ThemeToggle";
-import { cycleMode, getCurrentCycle, getMenu, getOffices, portionsTaken } from "@/lib/data";
+import { cycleMode, getCurrentCycle, getMenu, getOffices, homeStopsTaken, portionsTaken } from "@/lib/data";
 import { fill, getLang, strings } from "@/lib/i18n";
 import { fmtDateTime } from "@/lib/time";
 import { placeOrder } from "./actions";
@@ -18,11 +18,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
 
   const cycle = await getCurrentCycle();
   const mode = cycleMode(cycle);
-  const [items, offices, taken] = await Promise.all([
+  const [items, offices, taken, homeTaken] = await Promise.all([
     getMenu(),
     getOffices(),
     cycle ? portionsTaken(cycle.id) : Promise.resolve(0),
+    cycle?.home_enabled && cycle.home_max_stops != null ? homeStopsTaken(cycle.id) : Promise.resolve(0),
   ]);
+  const homeFull = !!cycle?.home_enabled && cycle.home_max_stops != null && homeTaken >= cycle.home_max_stops;
   const left = cycle ? Math.max(cycle.capacity - taken, 0) : 0;
   const soldOut = mode === "open" && left === 0;
   const other = lang === "sw" ? "en" : "sw";
@@ -87,6 +89,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
           t={t}
           submitLabel={mode === "late" ? t.submitLate : t.submit}
           successText={mode === "late" ? t.lateSent : t.orderSent}
+          homeEnabled={cycle.home_enabled}
+          homeFull={homeFull}
         />
       )}
       <StaffLink label={t.staffLink} />

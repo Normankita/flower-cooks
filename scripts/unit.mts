@@ -8,6 +8,7 @@ import { normalizeSupabaseUrl } from "../lib/supabase-url.ts";
 import { csvCell, toCsv } from "../lib/csv.ts";
 import { resolveTheme } from "../lib/theme.ts";
 import { lockState } from "../lib/lockout.ts";
+import { fmtKm, haversineKm, inTanzania, navUrl, normalizeMapUrl, orderStops, parseHome, parseLatLng, routeUrls } from "../lib/geo.ts";
 
 // phones
 assert.equal(normalizePhone("0712 345 678"), "255712345678");
@@ -56,6 +57,65 @@ assert.equal(cycleMode(cyc, new Date("2026-11-10T00:00:00Z")), "open");
 assert.equal(cycleMode(cyc, new Date("2026-11-12T18:00:00Z")), "late");
 assert.equal(cycleMode(cyc, new Date("2026-11-13T10:00:00Z")), "closed");
 assert.equal(cycleMode({ ...cyc, status: "closed" }, new Date("2026-11-10T00:00:00Z")), "closed");
+// geo
+const dodoma = { lat: -6.163, lng: 35.7516 };
+assert.ok(Math.abs(haversineKm(dodoma, dodoma)) < 1e-9);
+assert.ok(Math.abs(haversineKm({ lat: -6.163, lng: 35.7516 }, { lat: -6.163, lng: 35.8516 }) - 11.0) < 0.2); // 0.1° lng ≈ 11 km at this latitude
+assert.ok(Math.abs(haversineKm({ lat: 0, lng: 0 }, { lat: 1, lng: 0 }) - 111.19) < 0.1);
+assert.equal(fmtKm(0.85), "~850 m");
+assert.equal(fmtKm(3.24), "~3.2 km");
+assert.equal(inTanzania(dodoma), true);
+assert.equal(inTanzania({ lat: 0, lng: 0 }), false);
+assert.equal(inTanzania({ lat: 35.7516, lng: -6.163 }), false); // swapped
+assert.deepEqual(parseLatLng("-6.1630, 35.7516"), dodoma);
+assert.deepEqual(parseLatLng("https://maps.google.com/?q=-6.1630,35.7516"), dodoma); // WhatsApp location link
+assert.deepEqual(parseLatLng("https://www.google.com/maps/@-6.1630,35.7516,17z"), dodoma);
+assert.deepEqual(parseLatLng("https://www.google.com/maps/place/X/data=!3d-6.1630!4d35.7516"), dodoma);
+assert.deepEqual(parseLatLng("https://www.google.com/maps?q=-6.1630%2C35.7516"), dodoma);
+assert.equal(parseLatLng("https://maps.app.goo.gl/AbCdEf123"), null); // short link: no coordinates inside
+assert.equal(parseLatLng("karibu na kanisa"), null);
+assert.equal(parseLatLng("100.5, 200.5"), null); // out of range
+assert.equal(parseLatLng("%E0%A4%A -6.1,35.7"), null); // malformed escapes don't throw
+assert.equal(normalizeMapUrl("https://maps.app.goo.gl/AbCdEf123"), "https://maps.app.goo.gl/AbCdEf123");
+assert.equal(normalizeMapUrl("https://www.google.com/maps?q=-6.16,35.75"), "https://www.google.com/maps?q=-6.16,35.75");
+assert.equal(normalizeMapUrl("https://www.google.com/search?q=evil"), null); // google.com but not /maps
+assert.equal(normalizeMapUrl("http://maps.google.com/?q=1,2"), null); // not https
+assert.equal(normalizeMapUrl("https://evil.example.com/maps"), null);
+assert.equal(normalizeMapUrl("https://maps.google.com.evil.com/"), null); // look-alike host
+assert.equal(normalizeMapUrl("javascript:alert(1)"), null);
+assert.equal(normalizeMapUrl(""), null);
+assert.equal(navUrl(dodoma), "https://www.google.com/maps/dir/?api=1&destination=-6.163,35.7516&travelmode=driving");
+// home form validation
+assert.deepEqual(parseHome({ landmark: "" }), { ok: false, code: "errLandmark" });
+assert.deepEqual(parseHome({ landmark: "ab" }), { ok: false, code: "errLandmark" });
+assert.deepEqual(parseHome({ landmark: "Karibu na kanisa" }), { ok: true, home: { lat: null, lng: null, accuracyM: null, url: null } });
+assert.deepEqual(parseHome({ landmark: "geti la bluu", lat: "-6.1630004", lng: "35.7516", accuracy: "35.4" }), { ok: true, home: { lat: -6.163, lng: 35.7516, accuracyM: 35, url: null } });
+assert.deepEqual(parseHome({ landmark: "x y z", lat: "0", lng: "0" }), { ok: false, code: "errLocation" }); // outside Tanzania
+assert.deepEqual(parseHome({ landmark: "x y z", lat: "-6.1" }), { ok: false, code: "errLocation" }); // lat without lng
+assert.deepEqual(parseHome({ landmark: "x y z", lat: "abc", lng: "def" }), { ok: false, code: "errLocation" });
+const viaLink = parseHome({ landmark: "x y z", link: "https://maps.google.com/?q=-6.1630,35.7516" });
+assert.deepEqual(viaLink, { ok: true, home: { lat: -6.163, lng: 35.7516, accuracyM: null, url: "https://maps.google.com/?q=-6.1630,35.7516" } });
+const shortLink = parseHome({ landmark: "x y z", link: "https://maps.app.goo.gl/AbC123" });
+assert.deepEqual(shortLink, { ok: true, home: { lat: null, lng: null, accuracyM: null, url: "https://maps.app.goo.gl/AbC123" } }); // kept for navigation, no distance
+assert.deepEqual(parseHome({ landmark: "x y z", link: "https://evil.example.com/x" }), { ok: false, code: "errLocation" });
+assert.deepEqual(parseHome({ landmark: "x y z", link: "-6.1630, 35.7516" }), { ok: true, home: { lat: -6.163, lng: 35.7516, accuracyM: null, url: null } });
+assert.deepEqual(parseHome({ landmark: "x y z", link: "10.5, 20.5" }), { ok: false, code: "errLocation" });
+assert.deepEqual(parseHome({ landmark: "x y z", lat: "-6.2", lng: "35.8", link: "https://maps.google.com/?q=-6.1630,35.7516" }), { ok: true, home: { lat: -6.2, lng: 35.8, accuracyM: null, url: "https://maps.google.com/?q=-6.1630,35.7516" } }); // GPS wins
+// nearest-neighbour order: from the kitchen go to the closest first, then onwards
+const K = { lat: 0, lng: 0 };
+const st = (lng: number, n: string) => ({ at: { lat: 0, lng }, item: n });
+assert.deepEqual(orderStops(K, [st(0.3, "far"), st(0.1, "near"), st(0.2, "mid")]).map((s) => s.item), ["near", "mid", "far"]);
+assert.deepEqual(orderStops(K, []), []);
+// route links: split every N stops, each link starts where the previous one ended
+const pts = [1, 2, 3, 4, 5].map((n) => ({ lat: n, lng: n }));
+const links = routeUrls(K, pts, 2);
+assert.equal(links.length, 3);
+assert.ok(links[0].includes("origin=0%2C0") && links[0].includes("destination=2%2C2") && links[0].includes("waypoints=1%2C1"));
+assert.ok(links[1].includes("origin=2%2C2") && links[1].includes("destination=4%2C4"));
+assert.ok(links[2].includes("origin=4%2C4") && links[2].includes("destination=5%2C5") && !links[2].includes("waypoints"));
+assert.equal(routeUrls(null, pts, 10).length, 1);
+assert.ok(!routeUrls(null, pts, 10)[0].includes("origin="));
+assert.deepEqual(routeUrls(K, []), []);
 // login lockout
 const T = Date.parse("2026-11-12T10:00:00Z");
 const min = (n: number) => n * 60_000;
