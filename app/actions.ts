@@ -7,7 +7,7 @@ import { createOrder, parseOrderForm } from "@/lib/orders";
 import { fill, getLang, strings } from "@/lib/i18n";
 import { DbUnavailableError } from "@/lib/db-error";
 import { fail, OK, type ActionResult } from "@/lib/result";
-import { azampayCheckout, azampayConfigured } from "@/lib/azampay";
+import { azampayCheckout, payByPhoneEnabled } from "@/lib/azampay";
 import { activePending, expireStale, getOrderPayments, MAX_ATTEMPTS_PER_HOUR, newExternalId } from "@/lib/payments-db";
 import { normalizePhone } from "@/lib/phone";
 import type { Network } from "@/lib/mobile-network";
@@ -107,7 +107,7 @@ const NETWORKS: Network[] = ["Mpesa", "Tigo", "Airtel", "Halopesa"];
 export async function startPayment(fd: FormData): Promise<ActionResult> {
   const id = String(fd.get("order_id") ?? "");
   const t = strings(getLang(String(fd.get("lang") ?? "sw")));
-  if (!azampayConfigured()) return fail(t.payUnavailable);
+  if (!payByPhoneEnabled()) return fail(t.payUnavailable);
 
   const phone = normalizePhone(String(fd.get("pay_phone") ?? ""));
   if (!phone) return fail(t.errPhone);

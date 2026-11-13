@@ -9,6 +9,13 @@ const env = (k: string) => (process.env[k] ?? "").trim().replace(/^["']+|["']+$/
 export const azampayConfigured = () =>
   !!(env("AZAMPAY_APP_NAME") && env("AZAMPAY_CLIENT_ID") && env("AZAMPAY_CLIENT_SECRET") && env("AZAMPAY_AUTH_URL") && env("AZAMPAY_CHECKOUT_URL") && env("AZAMPAY_CALLBACK_SECRET"));
 
+/**
+ * Whether customers get the "Lipa kwa simu" panel. In sandbox mode AzamPay cannot take real payments, so the panel stays
+ * hidden unless AZAMPAY_SANDBOX_UI=1 (for testing). The callback endpoint works regardless (it is secret-gated).
+ */
+export const payByPhoneEnabled = () =>
+  azampayConfigured() && (env("AZAMPAY_ENV").toLowerCase() === "live" || env("AZAMPAY_SANDBOX_UI") === "1");
+
 /** Compare the secret in the callback URL with ours, in constant time. */
 export function callbackSecretOk(given: string): boolean {
   const want = env("AZAMPAY_CALLBACK_SECRET");

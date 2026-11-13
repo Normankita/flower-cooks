@@ -4,7 +4,7 @@ import SubmitButton from "@/components/SubmitButton";
 import StaffLink from "@/components/StaffLink";
 import SuccessMark from "@/components/SuccessMark";
 import ToastForm from "@/components/ToastForm";
-import { azampayConfigured } from "@/lib/azampay";
+import { payByPhoneEnabled } from "@/lib/azampay";
 import { getCycle, getOrder } from "@/lib/data";
 import { fill, getLang, strings } from "@/lib/i18n";
 import { detectNetwork } from "@/lib/mobile-network";
@@ -46,7 +46,7 @@ export default async function OrderPage({
   let payByPhone = false;
   let waitingAgeMs: number | null = null;
   let lastStatus: "failed" | "expired" | null = null;
-  if (showPay && azampayConfigured()) {
+  if (showPay && payByPhoneEnabled()) {
     try {
       const pays = await getOrderPayments(order.id);
       payByPhone = true;
