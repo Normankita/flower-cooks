@@ -23,6 +23,19 @@ export function fmtDateTime(iso: string | Date, lang: "sw" | "en" = "sw"): strin
   }).format(new Date(iso));
 }
 
+/** Short "Alhamisi 20:00" (weekday + time, EAT) for SMS texts. */
+export function fmtShortEAT(iso: string | Date, lang: "sw" | "en" = "sw"): string {
+  return new Intl.DateTimeFormat(lang === "sw" ? "sw-TZ" : "en-GB", {
+    timeZone: TZ,
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+    .format(new Date(iso))
+    .replace(",", "");
+}
+
 /** Value for <input type="datetime-local"> in EAT. */
 export function toEATInput(iso: string | Date): string {
   const s = new Date(new Date(iso).getTime() + OFFSET);

@@ -12,6 +12,8 @@ import { strings } from "@/lib/i18n";
 import { DbUnavailableError } from "@/lib/db-error";
 import { inTanzania } from "@/lib/geo";
 import { matchSms, normalizeRef, refCandidates, type SmsOrder, type SmsStatus } from "@/lib/sms-match";
+import { markWhatsApp, runReminder, type RunSummary } from "@/lib/reminders-db";
+import type { Kind } from "@/lib/reminders";
 import { fail, fromDb, type ActionResult } from "@/lib/result";
 
 type FormState = { error?: string; retry?: boolean; redirectTo?: string };
@@ -74,6 +76,34 @@ export async function setPayment(fd: FormData): Promise<ActionResult> {
   if (paid && ref) patch.payment_ref = ref;
   const { error } = await db().from("orders").update(patch).eq("id", str(fd, "order_id"));
   return finish(error);
+}
+
+/* ---------- reminders ---------- */
+const kindOf = (v: string): Kind | null => (v === "wed" || v === "thu" || v === "fri" ? v : null);
+
+/** Preview (dry) or send a reminder now. The cook's manual button works on any weekday (force), but never on a closed cycle. */
+export async function sendReminderNow(kind: string, dry: boolean): Promise<RunSummary> {
+  await requireAdmin();
+  const k = kindOf(kind);
+  if (!k) return { ok: false, reason: "Aina si sahihi.", dry, planned: 0, sent: 0, failed: 0, segments: 0 };
+  try {
+    return await runReminder(k, { dry, force: true });
+  } catch {
+    return { ok: false, reason: "Tatizo la mtandao. Jaribu tena.", dry, planned: 0, sent: 0, failed: 0, segments: 0 };
+  }
+}
+
+/** Tick a customer as messaged on WhatsApp (the cook sends it herself). */
+export async function markWhatsAppSent(kind: string, customerId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const k = kindOf(kind);
+  if (!k || !/^[0-9a-f-]{36}$/i.test(customerId)) return fail("Imeshindikana.");
+  try {
+    await markWhatsApp(k, customerId);
+    return { ok: true };
+  } catch {
+    return fail("Imeshindikana kuhifadhi.");
+  }
 }
 
 /* ---------- confirm payments from pasted SMS ---------- */

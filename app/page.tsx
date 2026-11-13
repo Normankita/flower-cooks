@@ -7,6 +7,7 @@ import ThemeSuggest from "@/components/ThemeSuggest";
 import ThemeToggle from "@/components/ThemeToggle";
 import { cycleMode, getCurrentCycle, getMenu, getOffices, homeStopsTaken, portionsTaken } from "@/lib/data";
 import { fill, getLang, strings } from "@/lib/i18n";
+import { smsConfigured } from "@/lib/sms";
 import { fmtDateTime } from "@/lib/time";
 import { placeOrder } from "./actions";
 
@@ -94,6 +95,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
           successText={mode === "late" ? t.lateSent : t.orderSent}
           homeEnabled={cycle.home_enabled}
           homeFull={homeFull}
+          smsOptInOffered={smsConfigured()}
         />
       )}
       <StaffLink label={t.staffLink} />

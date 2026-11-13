@@ -11,6 +11,7 @@ import { lockState } from "../lib/lockout.ts";
 import { detectNetwork } from "../lib/mobile-network.ts";
 import { normalizeStatus, parseCallback } from "../lib/azampay-callback.ts";
 import { checkCustomerMessage, matchSms, receivedAmounts, refCandidates } from "../lib/sms-match.ts";
+import { audience, buildMessage, dayAllows, eatWeekday, smsSegments } from "../lib/reminders.ts";
 import { amountMatches, becameSuccess, nextStatus, shouldMarkOrderPaid } from "../lib/payments.ts";
 import { fmtKm, haversineKm, inTanzania, navUrl, normalizeMapUrl, orderStops, parseHome, parseLatLng, routeUrls } from "../lib/geo.ts";
 
@@ -74,6 +75,39 @@ assert.equal(detectNetwork("255625123456"), "Halopesa");
 assert.equal(detectNetwork("255735123456"), null); // unknown prefix: customer must choose
 assert.equal(detectNetwork("0744123456"), null); // not normalised
 assert.equal(detectNetwork("25574412345"), null); // too short
+// reminders
+const msgOpts = { brand: "Flower Cooks", site: "https://flowercooks.norzah.dev", closes: "Alhamisi 20:00", unsubUrl: "https://flowercooks.norzah.dev/u/00000000-0000-4000-8000-000000000001" };
+for (const k of ["wed", "thu", "fri"] as const) {
+  const m = buildMessage(k, msgOpts);
+  const s = smsSegments(m);
+  assert.equal(s.encoding, "GSM-7", `${k} must be plain GSM-7 (no emoji/curly quotes): ${m}`);
+  assert.ok(s.segments <= 2, `${k} too long: ${s.length} chars`);
+  assert.ok(m.includes("Kujiondoa:"), `${k} must carry the unsubscribe link`);
+}
+assert.ok(buildMessage("wed", msgOpts).includes("Alhamisi 20:00") && buildMessage("wed", msgOpts).includes("flowercooks.norzah.dev"));
+assert.ok(!buildMessage("fri", msgOpts).includes("Agiza")); // "on our way" has no order link
+assert.deepEqual(smsSegments("a".repeat(160)), { segments: 1, encoding: "GSM-7", length: 160 });
+assert.equal(smsSegments("a".repeat(161)).segments, 2);
+assert.equal(smsSegments("a".repeat(306)).segments, 2);
+assert.equal(smsSegments("a".repeat(307)).segments, 3);
+assert.equal(smsSegments("[" + "a".repeat(159)).segments, 2); // "[" counts double in GSM-7
+assert.equal(smsSegments("Habari 🍛").encoding, "UCS-2"); // emoji doubles the cost; our templates avoid it
+assert.equal(smsSegments("x".repeat(71) + "🍛").segments, 2);
+assert.equal(eatWeekday(new Date("2026-11-11T05:00:00Z")), 3); // Wed 08:00 EAT
+assert.equal(eatWeekday(new Date("2026-11-11T22:00:00Z")), 4); // Wed 22:00 UTC = Thu 01:00 EAT
+assert.equal(dayAllows("wed", new Date("2026-11-11T07:00:00Z"), false), true);
+assert.equal(dayAllows("wed", new Date("2026-11-12T07:00:00Z"), false), false); // Thursday: wed job must not fire
+assert.equal(dayAllows("thu", new Date("2026-11-12T12:00:00Z"), false), true);
+assert.equal(dayAllows("wed", new Date("2026-11-12T07:00:00Z"), true), true); // cook's manual button
+assert.equal(dayAllows("fri", new Date("2026-11-10T07:00:00Z"), false), true); // no fixed weekday
+const C = (id: string) => ({ id, name: "N" + id, phone: "2557" + id, unsub_token: "t" + id });
+const custs = [C("1"), C("2"), C("3"), C("4")];
+const ords = [{ customer_id: "1", status: "confirmed" }, { customer_id: "2", status: "cancelled" }, { customer_id: "3", status: "delivered" }];
+assert.deepEqual(audience("wed", custs, ords, new Set()).map((c) => c.id), ["2", "4"]); // not 1 (ordered), not 3 (ordered); cancelled doesn't count
+assert.deepEqual(audience("thu", custs, ords, new Set(["2"])).map((c) => c.id), ["4"]); // already got it
+assert.deepEqual(audience("fri", custs, ords, new Set()).map((c) => c.id), ["1"]); // only a still-to-deliver (confirmed) order
+assert.deepEqual(audience("fri", custs, ords, new Set(["1"])).map((c) => c.id), []);
+assert.deepEqual(audience("wed", [], ords, new Set()), []);
 // ID extraction from a customer's pasted confirmation message (formats are approximations)
 const custMpesa = "QCD1A2B3C4 Confirmed. Tsh10,000.00 sent to NORMAN LEONARD KITA 70088846 on 13/11/26 at 1:12 PM. New M-Pesa balance is Tsh35,000.00. Transaction cost Tsh 0.00.";
 assert.deepEqual(refCandidates(custMpesa), ["QCD1A2B3C4"]); // not the Lipa Namba, amounts, date or time

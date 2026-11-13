@@ -39,6 +39,8 @@ export type ParsedOrder = {
   idemKey: string | null;
   /** Set when delivering to the customer's home (officeId is then null; deliveryNote is the landmark). */
   home: HomeLocation | null;
+  /** ticked "send me reminders by SMS" (consent is only ever switched ON here; opting out is via the SMS link / admin) */
+  smsOptIn: boolean;
 };
 
 export function parseOrderForm(
@@ -85,6 +87,7 @@ export function parseOrderForm(
       phone,
       officeId: home ? null : office || null,
       home,
+      smsOptIn: fd.get("sms_opt_in") === "on",
       deliveryNote: clean("delivery_note", 160),
       notes: clean("notes", 300),
       paymentMethod: fd.get("payment_method") === "cash" ? "cash" : "lipa",
@@ -171,12 +174,15 @@ async function createOrderInner(
 
   const sb = db();
   // Don't overwrite the customer's saved office when they order for home.
+  const custRow: Record<string, unknown> = { phone: p.phone, name: p.name };
+  if (p.officeId) custRow.office_id = p.officeId;
+  if (p.smsOptIn) {
+    custRow.sms_opt_in = true; // consent can only be switched ON by the customer here; an unticked box changes nothing
+    custRow.sms_opt_in_at = new Date().toISOString();
+  }
   const { data: cust, error: ce } = await sb
     .from("customers")
-    .upsert(
-      p.officeId ? { phone: p.phone, name: p.name, office_id: p.officeId } : { phone: p.phone, name: p.name },
-      { onConflict: "phone" },
-    )
+    .upsert(custRow, { onConflict: "phone" })
     .select("id")
     .single();
   if (ce || !cust) return { ok: false, code: ce ? failCode(ce) : "errGeneric" };

@@ -108,6 +108,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="flex justify-between text-sm text-red-700"><span>Hayajalipwa</span><b>{tzs(s.unpaid)}</b></div>
       </section>
 
+      <Link href="/admin/reminders" className="card block font-medium">
+        📣 Vikumbusho vya SMS na WhatsApp kwa wateja →
+      </Link>
+
       <section className="card space-y-3">
         <h2 className="font-semibold">📣 Ujumbe wa WhatsApp</h2>
         {messages.map((m) => (

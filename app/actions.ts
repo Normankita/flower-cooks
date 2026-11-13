@@ -126,6 +126,17 @@ export async function myOrders(ids: string[]): Promise<OrderBrief[]> {
   }
 }
 
+/** Unsubscribe link in every SMS: the token (unguessable) is the only credential. Idempotent. */
+export async function unsubscribeSms(fd: FormData): Promise<ActionResult> {
+  const token = String(fd.get("token") ?? "");
+  const t = strings(getLang(String(fd.get("lang") ?? "sw")));
+  if (!/^[0-9a-f-]{36}$/i.test(token)) return fail(t.errToast);
+  const { error } = await db().from("customers").update({ sms_opt_in: false }).eq("unsub_token", token);
+  if (error) return fail(t.errToast);
+  revalidatePath(`/u/${token}`);
+  return OK;
+}
+
 const NETWORKS: Network[] = ["Mpesa", "Tigo", "Airtel", "Halopesa"];
 
 /**

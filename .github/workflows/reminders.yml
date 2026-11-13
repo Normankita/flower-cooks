@@ -1,0 +1,45 @@
+# Sends the automatic SMS reminders (only to customers who opted in, only past customers who haven't ordered this week).
+#   Wednesday 10:00 EAT (07:00 UTC) → "wed"      Thursday 15:00 EAT (12:00 UTC) → "thu"
+# The endpoint also refuses to send on the wrong weekday and never texts the same person twice per cycle.
+# Repo settings → Secrets and variables → Actions:
+#   Variable SITE_URL     e.g. https://flowercooks.norzah.dev
+#   Secret   CRON_SECRET  same value as CRON_SECRET in the app's environment
+name: reminders
+
+on:
+  schedule:
+    - cron: "0 7 * * 3"
+    - cron: "0 12 * * 4"
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "wed or thu"
+        required: true
+        default: "wed"
+      dry:
+        description: "1 = only count, send nothing"
+        required: false
+        default: "1"
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call /api/cron/reminders
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT_KIND: ${{ github.event.inputs.kind }}
+          INPUT_DRY: ${{ github.event.inputs.dry }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then echo "SITE_URL variable and CRON_SECRET secret are required"; exit 1; fi
+          if [ -n "$INPUT_KIND" ]; then KIND="$INPUT_KIND"; DRY="${INPUT_DRY:-1}"
+          elif [ "$SCHEDULE" = "0 7 * * 3" ]; then KIND=wed; DRY=0
+          elif [ "$SCHEDULE" = "0 12 * * 4" ]; then KIND=thu; DRY=0
+          else echo "unknown trigger"; exit 1; fi
+          echo "kind=$KIND dry=$DRY"
+          curl -fsS --retry 2 --retry-delay 15 --max-time 150 -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$SITE_URL/api/cron/reminders?kind=$KIND&dry=$DRY"

@@ -29,6 +29,7 @@ export default function OrderForm({
   homeEnabled = false,
   homeFull = false,
   homeGps = true,
+  smsOptInOffered = false,
 }: {
   action: (s: State, fd: FormData) => Promise<State>;
   cycleId: string;
@@ -48,6 +49,8 @@ export default function OrderForm({
   homeFull?: boolean;
   /** Offer the "use my GPS" button (off in the cook's manual-entry form). */
   homeGps?: boolean;
+  /** Show the (unticked) "send me reminders by SMS" consent box. Only when SMS is configured. */
+  smsOptInOffered?: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -69,6 +72,7 @@ export default function OrderForm({
   const [qty, setQty] = useState<Record<string, number>>({});
   const [loc, setLoc] = useState<Loc | null>(null);
   const [link, setLink] = useState("");
+  const [smsOpt, setSmsOpt] = useState(false);
   const isHome = office === "home";
 
   // Returning customers: prefill from this device.
@@ -85,6 +89,7 @@ export default function OrderForm({
         setLoc({ lat: s.loc.lat, lng: s.loc.lng, acc: s.loc.acc ?? null, saved: true });
       }
       if (typeof s.link === "string") setLink(s.link);
+      if (s.sms === true) setSmsOpt(true);
       setNote(s.note ?? "");
       if (s.pay === "cash" || s.pay === "lipa") setPay(s.pay);
       const q: Record<string, number> = {};
@@ -154,7 +159,7 @@ export default function OrderForm({
         clearTimeout(timer.current);
         if (!remember) return;
         try {
-          localStorage.setItem(KEY, JSON.stringify({ name, phone, office, note, pay, qty, loc, link }));
+          localStorage.setItem(KEY, JSON.stringify({ name, phone, office, note, pay, qty, loc, link, sms: smsOpt }));
         } catch {}
       }}
     >
@@ -242,6 +247,13 @@ export default function OrderForm({
           <input id="notes" name="notes" className="input" value={extra} onChange={(e) => setExtra(e.target.value)} />
         </div>
       </section>
+
+      {smsOptInOffered && (
+        <label className="card flex cursor-pointer items-start gap-3 p-3! text-sm">
+          <input type="checkbox" name="sms_opt_in" className="mt-0.5 h-4 w-4 shrink-0 accent-orange-700" checked={smsOpt} onChange={(e) => setSmsOpt(e.target.checked)} />
+          <span>{t.smsOptIn}</span>
+        </label>
+      )}
 
       {state.retry && (
         <p role="status" className="card text-sm text-stone-700">
