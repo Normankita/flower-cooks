@@ -43,6 +43,8 @@ export type Order = {
   payment_method: "lipa" | "cash";
   payment_status: PaymentStatus;
   payment_ref: string | null;
+  /** payment confirmation message pasted by the customer (migration 0007) */
+  payment_msg: string | null;
   total: number;
   notes: string | null;
   delivery_note: string | null;

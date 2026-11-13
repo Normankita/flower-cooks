@@ -11,7 +11,7 @@ import { nextWeekdayEAT, parseEATInput } from "@/lib/time";
 import { strings } from "@/lib/i18n";
 import { DbUnavailableError } from "@/lib/db-error";
 import { inTanzania } from "@/lib/geo";
-import { matchSms, normalizeRef, type SmsOrder, type SmsStatus } from "@/lib/sms-match";
+import { matchSms, normalizeRef, refCandidates, type SmsOrder, type SmsStatus } from "@/lib/sms-match";
 import { fail, fromDb, type ActionResult } from "@/lib/result";
 
 type FormState = { error?: string; retry?: boolean; redirectTo?: string };
@@ -86,7 +86,7 @@ export type SmsRow = {
   snippet: string | null;
   phoneSeen: boolean;
 };
-type SmsOrderRow = { id: string; total: number; payment_ref: string | null; customers: { name: string; phone: string } | null };
+type SmsOrderRow = { id: string; total: number; payment_ref: string | null; payment_msg: string | null; customers: { name: string; phone: string } | null };
 
 /** Orders whose customer reported a transaction ID, plus references already used on paid orders (all cycles). */
 async function smsCandidates() {
@@ -94,7 +94,7 @@ async function smsCandidates() {
   const [rep, used] = await Promise.all([
     sb
       .from("orders")
-      .select("id,total,payment_ref,customers(name,phone)")
+      .select("id,total,payment_ref,payment_msg,customers(name,phone)")
       .eq("payment_status", "reported")
       .in("status", ["confirmed", "delivered"])
       .not("payment_ref", "is", null)
@@ -108,6 +108,8 @@ async function smsCandidates() {
     phone: o.customers?.phone ?? "",
     total: o.total,
     ref: o.payment_ref ?? "",
+    // the customer may have pasted the whole message: every ID-like token in it can match the cook's SMS
+    alsoRefs: o.payment_msg ? refCandidates(o.payment_msg) : [],
   }));
   const usedRefs = new Set(((used.data ?? []) as { payment_ref: string }[]).map((r) => normalizeRef(r.payment_ref)));
   return { orders, usedRefs };

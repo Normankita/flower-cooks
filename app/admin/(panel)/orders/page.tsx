@@ -7,6 +7,7 @@ import { displayPhone } from "@/lib/phone";
 import HomeStop from "@/components/HomeStop";
 import SmsReconcile from "@/components/SmsReconcile";
 import type { LatLng } from "@/lib/geo";
+import { checkCustomerMessage } from "@/lib/sms-match";
 import { linesText, placeName } from "@/lib/summary";
 import { tzs } from "@/lib/time";
 import type { Order } from "@/lib/types";
@@ -42,7 +43,7 @@ function StatusBtn({ id, status, label, cls }: { id: string; status: string; lab
   );
 }
 
-function Row({ o, kitchen }: { o: Order; kitchen: LatLng | null }) {
+function Row({ o, kitchen, lipa }: { o: Order; kitchen: LatLng | null; lipa: string | null }) {
   const [sl, sc] = statusBadge[o.status];
   const [pl, pc] = payBadge[o.payment_status];
   const dead = o.status === "declined" || o.status === "cancelled";
@@ -67,6 +68,19 @@ function Row({ o, kitchen }: { o: Order; kitchen: LatLng | null }) {
         <span className="text-stone-500">{o.payment_method === "lipa" ? "Lipa Namba" : "Cash"}</span>
         {o.payment_ref && <span className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-xs">{o.payment_ref}</span>}
       </div>
+      {o.payment_msg && (() => {
+        const c = checkCustomerMessage(o.payment_msg, o.total, lipa);
+        return (
+          <details className="rounded-xl bg-(--glass) p-2 text-sm">
+            <summary className="cursor-pointer">
+              📩 Ujumbe wa mteja{" "}
+              <span className={c.amountOk ? "text-green-700" : "text-amber-700"}>{c.amountOk ? "✅ kiasi kinalingana" : "⚠️ kiasi hakionekani"}</span>{" · "}
+              <span className={c.lipaSeen ? "text-green-700" : "text-amber-700"}>{c.lipaSeen ? "✅ Lipa Namba inaonekana" : "⚠️ Lipa Namba haionekani"}</span>
+            </summary>
+            <p className="mt-2 whitespace-pre-wrap rounded-lg bg-stone-50 p-2 text-xs text-stone-700">{o.payment_msg}</p>
+          </details>
+        );
+      })()}
       {!dead && (
         <div className="flex flex-wrap gap-2 pt-1">
           {o.status === "late_request" && (
@@ -120,13 +134,13 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       {late.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-semibold text-orange-800">Maombi ya ziada ({late.length})</h2>
-          {late.map((o) => <Row key={o.id} o={o} kitchen={kitchen} />)}
+          {late.map((o) => <Row key={o.id} o={o} kitchen={kitchen} lipa={cycle.lipa_namba} />)}
         </section>
       )}
       <section className="space-y-2">
         <h2 className="font-semibold">Oda ({rest.length})</h2>
         {rest.length === 0 && <p className="text-sm text-stone-500">Hakuna oda bado.</p>}
-        {rest.map((o) => <Row key={o.id} o={o} kitchen={kitchen} />)}
+        {rest.map((o) => <Row key={o.id} o={o} kitchen={kitchen} lipa={cycle.lipa_namba} />)}
       </section>
     </div>
   );

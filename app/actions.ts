@@ -10,6 +10,7 @@ import { fail, OK, type ActionResult } from "@/lib/result";
 import { azampayCheckout, payByPhoneEnabled } from "@/lib/azampay";
 import { activePending, expireStale, getOrderPayments, MAX_ATTEMPTS_PER_HOUR, newExternalId } from "@/lib/payments-db";
 import { normalizePhone } from "@/lib/phone";
+import { refCandidates } from "@/lib/sms-match";
 import type { Network } from "@/lib/mobile-network";
 
 /**
@@ -43,11 +44,22 @@ export async function placeOrder(_: FormState, fd: FormData): Promise<FormState>
 export async function reportPayment(fd: FormData): Promise<ActionResult> {
   const id = String(fd.get("order_id") ?? "");
   const t = strings(getLang(String(fd.get("lang") ?? "sw")));
-  const ref = String(fd.get("ref") ?? "").trim().slice(0, 40);
-  if (!ref) return fail(t.errToast);
+  // One box: either just the transaction ID, or the whole confirmation message pasted from the SMS.
+  const raw = String(fd.get("ref") ?? "").trim().slice(0, 800);
+  if (!raw) return fail(t.errToast);
+  let ref: string;
+  let msg: string | null = null;
+  if (/\s/.test(raw)) {
+    const found = refCandidates(raw);
+    if (found.length === 0) return fail(t.payRefNotFound);
+    ref = found[0]; // best guess; the whole message is kept too, and the cook's SMS check tries every ID-like token in it
+    msg = raw;
+  } else {
+    ref = raw.slice(0, 40);
+  }
   const { error } = await db()
     .from("orders")
-    .update({ payment_ref: ref, payment_status: "reported" })
+    .update({ payment_ref: ref, payment_msg: msg, payment_status: "reported" })
     .eq("id", id)
     .eq("payment_status", "unpaid");
   if (error) return fail(t.errToast);

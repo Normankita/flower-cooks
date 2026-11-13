@@ -10,7 +10,7 @@ import { resolveTheme } from "../lib/theme.ts";
 import { lockState } from "../lib/lockout.ts";
 import { detectNetwork } from "../lib/mobile-network.ts";
 import { normalizeStatus, parseCallback } from "../lib/azampay-callback.ts";
-import { matchSms, receivedAmounts } from "../lib/sms-match.ts";
+import { checkCustomerMessage, matchSms, receivedAmounts, refCandidates } from "../lib/sms-match.ts";
 import { amountMatches, becameSuccess, nextStatus, shouldMarkOrderPaid } from "../lib/payments.ts";
 import { fmtKm, haversineKm, inTanzania, navUrl, normalizeMapUrl, orderStops, parseHome, parseLatLng, routeUrls } from "../lib/geo.ts";
 
@@ -74,6 +74,23 @@ assert.equal(detectNetwork("255625123456"), "Halopesa");
 assert.equal(detectNetwork("255735123456"), null); // unknown prefix: customer must choose
 assert.equal(detectNetwork("0744123456"), null); // not normalised
 assert.equal(detectNetwork("25574412345"), null); // too short
+// ID extraction from a customer's pasted confirmation message (formats are approximations)
+const custMpesa = "QCD1A2B3C4 Confirmed. Tsh10,000.00 sent to NORMAN LEONARD KITA 70088846 on 13/11/26 at 1:12 PM. New M-Pesa balance is Tsh35,000.00. Transaction cost Tsh 0.00.";
+assert.deepEqual(refCandidates(custMpesa), ["QCD1A2B3C4"]); // not the Lipa Namba, amounts, date or time
+assert.deepEqual(refCandidates("Umetuma TSh 8,000 kwa 70088846. Kumbukumbu: 12345678901. Salio TSh 50,000."), ["12345678901"]);
+assert.deepEqual(refCandidates("Muamala: CI251113.1234.A12345 umefanikiwa. Tsh 10,000.00 kwenda 0762028554"), ["CI251113.1234.A12345"]);
+assert.deepEqual(refCandidates("QCD1A2B3C4"), ["QCD1A2B3C4"]); // a bare ID
+assert.deepEqual(refCandidates("Nimelipa jana kupitia simu yangu 255762028554 kiasi 10000.00"), []); // nothing ID-like
+assert.deepEqual(refCandidates("70088846 0762028554 255762028554 10000.00 2026-11-13"), []); // numbers that are NOT transaction IDs
+assert.equal(refCandidates("AB12CD34EF AB12CD34EG AB12CD34EH AB12CD34EI AB12CD34EJ AB12CD34EK").length, 5); // capped
+const custMsgOrder = { id: "m", name: "N", phone: "255762028554", total: 10000, ref: "ZZZ", alsoRefs: refCandidates(custMpesa) };
+assert.equal(matchSms("QCD1A2B3C4 Confirmed. You have received Tsh10,000.00 from X 255762028554. New M-Pesa balance is Tsh35,000.00.", [custMsgOrder])[0].status, "ready"); // matched through the customer's message
+assert.equal(matchSms("QCD1A2B3C4 Confirmed. You have received Tsh10,000.00 from X.", [custMsgOrder])[0].ref, "QCD1A2B3C4");
+assert.deepEqual(checkCustomerMessage(custMpesa, 10000, "70088846"), { amountOk: true, lipaSeen: true });
+assert.deepEqual(checkCustomerMessage(custMpesa, 12000, "70088846"), { amountOk: false, lipaSeen: true });
+assert.deepEqual(checkCustomerMessage("QCD1A2B3C4 Confirmed. Tsh10,000.00 sent to JOHN 12345678.", 10000, "70088846"), { amountOk: true, lipaSeen: false }); // paid someone else
+assert.deepEqual(checkCustomerMessage(custMpesa, 35000, "70088846").amountOk, false); // the balance is not the payment
+assert.deepEqual(checkCustomerMessage(custMpesa, 10000, null), { amountOk: true, lipaSeen: false });
 // pasted SMS matching (formats below are approximations of real messages)
 const mpesa = "QCD1A2B3C4 Confirmed. You have received Tsh10,000.00 from JUMA ALI 255762028554 on 13/11/26 at 1:12 PM. New M-Pesa balance is Tsh35,000.00.";
 const tigo = "Umepokea TSh 8,000 kutoka kwa ASHA 0712345678. Kumbukumbu: 12345678901. Salio jipya TSh 50,000.";

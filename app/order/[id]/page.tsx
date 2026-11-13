@@ -150,9 +150,9 @@ export default async function OrderPage({
               {order.payment_status === "reported" ? (
                 <p className="text-sm text-green-700">{t.payRefSaved} ({order.payment_ref})</p>
               ) : (
-                <ToastForm action={reportPayment} success={t.payRefSaved} errorText={t.errToast} className="flex gap-2">
+                <ToastForm action={reportPayment} success={t.payRefSaved} errorText={t.errToast} className="flex items-start gap-2">
                   {hidden}
-                  <input name="ref" className="input" placeholder={t.payRefLabel} maxLength={40} required />
+                  <textarea name="ref" rows={3} className="input" placeholder={t.payRefLabel} aria-label={t.payRefLabel} maxLength={800} required />
                   <SubmitButton className="btn">{t.payRefSave}</SubmitButton>
                 </ToastForm>
               )}
