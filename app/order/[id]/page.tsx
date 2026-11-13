@@ -1,14 +1,20 @@
 import Link from "next/link";
+import PayByPhone from "@/components/PayByPhone";
 import SubmitButton from "@/components/SubmitButton";
 import StaffLink from "@/components/StaffLink";
 import SuccessMark from "@/components/SuccessMark";
 import ToastForm from "@/components/ToastForm";
+import { azampayConfigured } from "@/lib/azampay";
 import { getCycle, getOrder } from "@/lib/data";
 import { fill, getLang, strings } from "@/lib/i18n";
+import { detectNetwork } from "@/lib/mobile-network";
+import { activePending, ageMs, getOrderPayments } from "@/lib/payments-db";
+import { displayPhone } from "@/lib/phone";
 import { tzs } from "@/lib/time";
 import { cancelOrder, reportPayment } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // the pay-by-phone action waits on AzamPay, which can take ~30 s
 
 export default async function OrderPage({
   params,
@@ -34,6 +40,23 @@ export default async function OrderPage({
     order.payment_method === "lipa" &&
     (order.status === "confirmed" || order.status === "delivered") &&
     order.payment_status !== "paid";
+
+  // Pay-by-phone (AzamPay): offered when configured. If the payments table can't be read we simply fall back to the
+  // manual Lipa Namba flow instead of breaking the page.
+  let payByPhone = false;
+  let waitingAgeMs: number | null = null;
+  let lastStatus: "failed" | "expired" | null = null;
+  if (showPay && azampayConfigured()) {
+    try {
+      const pays = await getOrderPayments(order.id);
+      payByPhone = true;
+      const active = activePending(pays);
+      if (active) waitingAgeMs = ageMs(active);
+      else if (pays[0]) lastStatus = pays[0].status === "failed" ? "failed" : pays[0].status === "success" ? null : "expired";
+    } catch (e) {
+      console.error("order page: payments unavailable, using manual flow:", e instanceof Error ? e.message : e);
+    }
+  }
 
   const banner =
     order.status === "late_request" ? t.lateReceived
@@ -85,8 +108,21 @@ export default async function OrderPage({
       {showPay && (
         <section className="card space-y-3">
           <h2 className="font-semibold">{t.payNow}</h2>
+          {payByPhone && (
+            <PayByPhone
+              orderId={order.id}
+              lang={lang}
+              t={t}
+              total={order.total}
+              defaultPhone={displayPhone(order.customers?.phone ?? "")}
+              defaultNetwork={detectNetwork(order.customers?.phone ?? "")}
+              waitingAgeMs={waitingAgeMs}
+              lastStatus={lastStatus}
+            />
+          )}
           {cycle?.lipa_namba ? (
             <>
+              {payByPhone && <div className="border-t border-stone-300/50 pt-3 text-sm font-medium">{t.payOr}</div>}
               <p className="text-sm text-stone-600">{t.payLipaHow}</p>
               <div className="rounded-2xl bg-linear-to-br from-orange-100/90 to-amber-100/80 p-4 text-center shadow-inner">
                 <div className="text-sm text-stone-600">{t.lipaNumber}</div>
@@ -104,7 +140,7 @@ export default async function OrderPage({
               )}
             </>
           ) : (
-            <p className="text-sm text-stone-600">{t.payLater}</p>
+            !payByPhone && <p className="text-sm text-stone-600">{t.payLater}</p>
           )}
         </section>
       )}

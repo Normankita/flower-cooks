@@ -8,6 +8,9 @@ import { normalizeSupabaseUrl } from "../lib/supabase-url.ts";
 import { csvCell, toCsv } from "../lib/csv.ts";
 import { resolveTheme } from "../lib/theme.ts";
 import { lockState } from "../lib/lockout.ts";
+import { detectNetwork } from "../lib/mobile-network.ts";
+import { normalizeStatus, parseCallback } from "../lib/azampay-callback.ts";
+import { amountMatches, becameSuccess, nextStatus, shouldMarkOrderPaid } from "../lib/payments.ts";
 import { fmtKm, haversineKm, inTanzania, navUrl, normalizeMapUrl, orderStops, parseHome, parseLatLng, routeUrls } from "../lib/geo.ts";
 
 // phones
@@ -57,6 +60,63 @@ assert.equal(cycleMode(cyc, new Date("2026-11-10T00:00:00Z")), "open");
 assert.equal(cycleMode(cyc, new Date("2026-11-12T18:00:00Z")), "late");
 assert.equal(cycleMode(cyc, new Date("2026-11-13T10:00:00Z")), "closed");
 assert.equal(cycleMode({ ...cyc, status: "closed" }, new Date("2026-11-10T00:00:00Z")), "closed");
+// mobile network guess
+assert.equal(detectNetwork("255744123456"), "Mpesa");
+assert.equal(detectNetwork("255755123456"), "Mpesa");
+assert.equal(detectNetwork("255765123456"), "Mpesa");
+assert.equal(detectNetwork("255655123456"), "Tigo");
+assert.equal(detectNetwork("255715123456"), "Tigo");
+assert.equal(detectNetwork("255685123456"), "Airtel");
+assert.equal(detectNetwork("255785123456"), "Airtel");
+assert.equal(detectNetwork("255615123456"), "Halopesa");
+assert.equal(detectNetwork("255625123456"), "Halopesa");
+assert.equal(detectNetwork("255735123456"), null); // unknown prefix: customer must choose
+assert.equal(detectNetwork("0744123456"), null); // not normalised
+assert.equal(detectNetwork("25574412345"), null); // too short
+// azampay callback parsing (tolerant of field names, strict about meaning)
+const cb1 = parseCallback({ msisdn: "255700000000", amount: "1000", message: "Payment completed", utilityref: "fc123-ab12cd", operator: "Airtel", reference: "AZAM-9", transactionstatus: "success" });
+assert.deepEqual(cb1, { externalId: "fc123-ab12cd", status: "success", amount: "1000", providerRef: "AZAM-9", message: "Payment completed", password: null });
+assert.equal(parseCallback({ UtilityRef: "x1", TransactionStatus: "Success", Amount: 1000 })?.status, "success"); // case-insensitive
+assert.equal(parseCallback({ data: { externalId: "x2", status: "FAILED", message: "Insufficient funds" } })?.status, "failed"); // nested
+assert.equal(parseCallback({ utilityref: "x3", transactionstatus: "pending" })?.status, "unknown"); // unsure → unknown (changes nothing)
+assert.equal(parseCallback({ utilityref: "x4" })?.status, "unknown"); // no status at all
+assert.equal(parseCallback({ utilityref: "x5", success: true })?.status, "success");
+assert.equal(parseCallback({ utilityref: "x6", transactionstatus: "failure" })?.status, "failed");
+assert.equal(parseCallback({ utilityref: "x7", transactionstatus: "unsuccessful" })?.status, "failed");
+assert.equal(parseCallback({ utilityref: "x8", password: "p@ss" })?.password, "p@ss");
+assert.equal(parseCallback({ amount: "1000", transactionstatus: "success" }), null); // no reference we can match
+assert.equal(parseCallback(null), null);
+assert.equal(parseCallback("text"), null);
+assert.equal(parseCallback([1, 2]), null);
+assert.equal(normalizeStatus("Completed"), "success");
+assert.equal(normalizeStatus("SUCCESS "), "success");
+assert.equal(normalizeStatus(""), "unknown");
+assert.equal(normalizeStatus(undefined), "unknown");
+// payment state rules
+assert.equal(nextStatus("pending", "success"), "success");
+assert.equal(nextStatus("pending", "failed"), "failed");
+assert.equal(nextStatus("pending", "expired"), "expired");
+assert.equal(nextStatus("success", "failed"), "success"); // success can never be undone
+assert.equal(nextStatus("success", "success"), "success"); // duplicate callback
+assert.equal(nextStatus("failed", "success"), "failed");
+assert.equal(nextStatus("expired", "success"), "success"); // late PIN entry: money moved
+assert.equal(nextStatus("expired", "failed"), "expired");
+assert.equal(becameSuccess("pending", "success"), true);
+assert.equal(becameSuccess("expired", "success"), true);
+assert.equal(becameSuccess("success", "success"), false); // second callback must not credit again
+assert.equal(becameSuccess("pending", "failed"), false);
+assert.equal(amountMatches(8000, 8000), true);
+assert.equal(amountMatches(8000, "8000"), true);
+assert.equal(amountMatches(8000, "8,000"), true);
+assert.equal(amountMatches(8000, "8000.00"), true); // 8000.00 parses to the integer 8000
+assert.equal(amountMatches(8000, "7999"), false);
+assert.equal(amountMatches(8000, 8000.5), false);
+assert.equal(amountMatches(8000, ""), false);
+assert.equal(amountMatches(8000, null), false);
+assert.equal(amountMatches(8000, "abc"), false);
+assert.equal(shouldMarkOrderPaid("unpaid"), true);
+assert.equal(shouldMarkOrderPaid("reported"), true);
+assert.equal(shouldMarkOrderPaid("paid"), false);
 // geo
 const dodoma = { lat: -6.163, lng: 35.7516 };
 assert.ok(Math.abs(haversineKm(dodoma, dodoma)) < 1e-9);

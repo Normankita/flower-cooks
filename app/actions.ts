@@ -7,6 +7,10 @@ import { createOrder, parseOrderForm } from "@/lib/orders";
 import { fill, getLang, strings } from "@/lib/i18n";
 import { DbUnavailableError } from "@/lib/db-error";
 import { fail, OK, type ActionResult } from "@/lib/result";
+import { azampayCheckout, azampayConfigured } from "@/lib/azampay";
+import { activePending, expireStale, getOrderPayments, MAX_ATTEMPTS_PER_HOUR, newExternalId } from "@/lib/payments-db";
+import { normalizePhone } from "@/lib/phone";
+import type { Network } from "@/lib/mobile-network";
 
 /**
  * retry: the failure was a network problem, so the form may resubmit automatically (same idempotency key).
@@ -91,4 +95,61 @@ export async function submitReview(fd: FormData): Promise<ActionResult> {
   }
   revalidatePath(`/r/${token}`);
   return OK;
+}
+
+const NETWORKS: Network[] = ["Mpesa", "Tigo", "Airtel", "Halopesa"];
+
+/**
+ * Send a USSD push (AzamPay) for an order. The order is marked paid ONLY by the callback (never here).
+ * Safeguards: one waiting attempt per order (unique index + check), max 3 attempts/hour, amount always the
+ * server-side order total, nothing sent for paid/cancelled orders. A timeout from AzamPay is "unknown", not failure.
+ */
+export async function startPayment(fd: FormData): Promise<ActionResult> {
+  const id = String(fd.get("order_id") ?? "");
+  const t = strings(getLang(String(fd.get("lang") ?? "sw")));
+  if (!azampayConfigured()) return fail(t.payUnavailable);
+
+  const phone = normalizePhone(String(fd.get("pay_phone") ?? ""));
+  if (!phone) return fail(t.errPhone);
+  const network = NETWORKS.find((n) => n === String(fd.get("network") ?? ""));
+  if (!network) return fail(t.payNetworkNeeded);
+
+  try {
+    const order = await getOrder(id);
+    if (!order || order.payment_method !== "lipa" || order.payment_status === "paid" || !(order.status === "confirmed" || order.status === "delivered")) {
+      return fail(t.errToast);
+    }
+    await expireStale(id);
+    const rows = await getOrderPayments(id);
+    if (activePending(rows)) return fail(t.payPending);
+    if (rows.filter((p) => Date.now() - new Date(p.created_at).getTime() < 3_600_000).length >= MAX_ATTEMPTS_PER_HOUR) return fail(t.payTooMany);
+
+    const externalId = newExternalId(id);
+    const ins = await db()
+      .from("payments")
+      .insert({ order_id: id, provider: "azampay", external_id: externalId, network, phone, amount: order.total })
+      .select("id")
+      .single();
+    if (ins.error?.code === "23505") return fail(t.payPending); // unique index: another attempt is already waiting
+    if (ins.error || !ins.data) return fail(t.errToast);
+
+    const res = await azampayCheckout({ phone, amount: order.total, externalId, network });
+    if (res.kind === "rejected") {
+      await db()
+        .from("payments")
+        .update({ status: "failed", failure_reason: res.message.slice(0, 300), updated_at: new Date().toISOString() })
+        .eq("id", ins.data.id)
+        .eq("status", "pending");
+      revalidatePath(`/order/${id}`);
+      return fail(t.payRefused);
+    }
+    if (res.kind === "accepted") {
+      await db().from("payments").update({ provider_ref: res.transactionId, updated_at: new Date().toISOString() }).eq("id", ins.data.id);
+    }
+    // "unknown" (timeout): the prompt may still arrive and the callback may still confirm, so leave it pending.
+    revalidatePath(`/order/${id}`);
+    return OK;
+  } catch {
+    return fail(t.errToast);
+  }
 }
