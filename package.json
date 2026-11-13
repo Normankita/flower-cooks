@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --experimental-strip-types scripts/unit.mts",
-    "check:sql": "node scripts/check-sql.mjs"
+    "check:sql": "node scripts/check-sql.mjs",
+    "test:db": "node scripts/test-rpc.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
