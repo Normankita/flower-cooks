@@ -11,6 +11,7 @@ import { nextWeekdayEAT, parseEATInput } from "@/lib/time";
 import { strings } from "@/lib/i18n";
 import { DbUnavailableError } from "@/lib/db-error";
 import { inTanzania } from "@/lib/geo";
+import { matchSms, normalizeRef, type SmsOrder, type SmsStatus } from "@/lib/sms-match";
 import { fail, fromDb, type ActionResult } from "@/lib/result";
 
 type FormState = { error?: string; retry?: boolean; redirectTo?: string };
@@ -73,6 +74,97 @@ export async function setPayment(fd: FormData): Promise<ActionResult> {
   if (paid && ref) patch.payment_ref = ref;
   const { error } = await db().from("orders").update(patch).eq("id", str(fd, "order_id"));
   return finish(error);
+}
+
+/* ---------- confirm payments from pasted SMS ---------- */
+export type SmsRow = {
+  orderId: string;
+  name: string;
+  total: number;
+  ref: string;
+  status: SmsStatus;
+  snippet: string | null;
+  phoneSeen: boolean;
+};
+type SmsOrderRow = { id: string; total: number; payment_ref: string | null; customers: { name: string; phone: string } | null };
+
+/** Orders whose customer reported a transaction ID, plus references already used on paid orders (all cycles). */
+async function smsCandidates() {
+  const sb = db();
+  const [rep, used] = await Promise.all([
+    sb
+      .from("orders")
+      .select("id,total,payment_ref,customers(name,phone)")
+      .eq("payment_status", "reported")
+      .in("status", ["confirmed", "delivered"])
+      .not("payment_ref", "is", null)
+      .limit(300),
+    sb.from("orders").select("payment_ref").eq("payment_status", "paid").not("payment_ref", "is", null).limit(5000),
+  ]);
+  if (rep.error || used.error) throw new Error((rep.error ?? used.error)?.message);
+  const orders: SmsOrder[] = ((rep.data ?? []) as unknown as SmsOrderRow[]).map((o) => ({
+    id: o.id,
+    name: o.customers?.name ?? "",
+    phone: o.customers?.phone ?? "",
+    total: o.total,
+    ref: o.payment_ref ?? "",
+  }));
+  const usedRefs = new Set(((used.data ?? []) as { payment_ref: string }[]).map((r) => normalizeRef(r.payment_ref)));
+  return { orders, usedRefs };
+}
+
+/** Step 1 (changes nothing): match the pasted SMS text against reported payments. */
+export async function previewSms(fd: FormData): Promise<{ ok: boolean; error?: string; rows?: SmsRow[] }> {
+  await requireAdmin();
+  const text = String(fd.get("sms") ?? "").slice(0, 30_000);
+  if (text.trim().length < 10) return { ok: false, error: "Bandika ujumbe wa SMS kwanza." };
+  try {
+    const { orders, usedRefs } = await smsCandidates();
+    if (orders.length === 0) return { ok: false, error: "Hakuna malipo yanayosubiri kuthibitishwa." };
+    const byId = new Map(orders.map((o) => [o.id, o]));
+    const rows = matchSms(text, orders, usedRefs).map((m) => ({
+      orderId: m.orderId,
+      name: byId.get(m.orderId)?.name ?? "",
+      total: byId.get(m.orderId)?.total ?? 0,
+      ref: byId.get(m.orderId)?.ref ?? m.ref,
+      status: m.status,
+      snippet: m.snippet,
+      phoneSeen: m.phoneSeen,
+    }));
+    return { ok: true, rows };
+  } catch {
+    return { ok: false, error: "Tatizo la mtandao. Jaribu tena." };
+  }
+}
+
+/**
+ * Step 2: mark the chosen orders paid. The match is recomputed here from the pasted text (the browser's list is not
+ * trusted): only orders whose reference really is in the text, and not duplicates, can be confirmed.
+ */
+export async function confirmSms(fd: FormData): Promise<{ ok: boolean; error?: string; applied?: number }> {
+  await requireAdmin();
+  const text = String(fd.get("sms") ?? "").slice(0, 30_000);
+  const ids = new Set(fd.getAll("ids").map(String));
+  if (ids.size === 0) return { ok: false, error: "Hakuna oda iliyochaguliwa." };
+  try {
+    const { orders, usedRefs } = await smsCandidates();
+    const ok = matchSms(text, orders, usedRefs).filter((m) => ids.has(m.orderId) && (m.status === "ready" || m.status === "check"));
+    let applied = 0;
+    for (const m of ok) {
+      const { data, error } = await db()
+        .from("orders")
+        .update({ payment_status: "paid", paid_at: new Date().toISOString() })
+        .eq("id", m.orderId)
+        .eq("payment_status", "reported")
+        .select("id");
+      if (error) return { ok: false, error: fromDb(error).error, applied };
+      applied += data?.length ?? 0;
+    }
+    refresh();
+    return { ok: true, applied };
+  } catch {
+    return { ok: false, error: "Tatizo la mtandao. Jaribu tena." };
+  }
 }
 
 export async function adminPlaceOrder(_: FormState, fd: FormData): Promise<FormState> {

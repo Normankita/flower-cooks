@@ -10,6 +10,7 @@ import { resolveTheme } from "../lib/theme.ts";
 import { lockState } from "../lib/lockout.ts";
 import { detectNetwork } from "../lib/mobile-network.ts";
 import { normalizeStatus, parseCallback } from "../lib/azampay-callback.ts";
+import { matchSms, receivedAmounts } from "../lib/sms-match.ts";
 import { amountMatches, becameSuccess, nextStatus, shouldMarkOrderPaid } from "../lib/payments.ts";
 import { fmtKm, haversineKm, inTanzania, navUrl, normalizeMapUrl, orderStops, parseHome, parseLatLng, routeUrls } from "../lib/geo.ts";
 
@@ -73,7 +74,36 @@ assert.equal(detectNetwork("255625123456"), "Halopesa");
 assert.equal(detectNetwork("255735123456"), null); // unknown prefix: customer must choose
 assert.equal(detectNetwork("0744123456"), null); // not normalised
 assert.equal(detectNetwork("25574412345"), null); // too short
-// azampay callback parsing (tolerant of field names, strict about meaning)
+// pasted SMS matching (formats below are approximations of real messages)
+const mpesa = "QCD1A2B3C4 Confirmed. You have received Tsh10,000.00 from JUMA ALI 255762028554 on 13/11/26 at 1:12 PM. New M-Pesa balance is Tsh35,000.00.";
+const tigo = "Umepokea TSh 8,000 kutoka kwa ASHA 0712345678. Kumbukumbu: 12345678901. Salio jipya TSh 50,000.";
+const airtel = "Umepokea Tsh 10,000.00 kutoka 0689123456 ASHA. Muamala: CI251113.1234.A12345. Salio Tsh 20,000.00";
+const O = (id: string, ref: string, total: number, phone = "255762028554") => ({ id, name: "N" + id, phone, total, ref });
+const sms = [mpesa, tigo, airtel].join("\n\n");
+let mm = matchSms(sms, [O("a", "qcd1a2b3c4", 10000), O("b", "12345678901", 8000, "255712345678"), O("c", "CI251113.1234.A12345", 10000, "255689123456"), O("d", "ZZZ999999", 10000)]);
+assert.deepEqual(mm.map((m) => m.status), ["ready", "ready", "ready", "missing"]);
+assert.equal(mm[0].phoneSeen, true); // customer's number appears in the M-Pesa message
+assert.deepEqual(mm[0].amounts, [10000]); // the 35,000 balance is NOT counted as a payment
+mm = matchSms(sms, [O("a", "QCD1A2B3C4", 35000)]);
+assert.equal(mm[0].status, "check"); // balance trap: order total equals the BALANCE, not the received amount
+mm = matchSms(sms, [O("a", "QCD1A2B3C4", 9000)]);
+assert.equal(mm[0].status, "check"); // underpaid / wrong amount
+mm = matchSms(sms, [O("a", "QCD1A2B3C4", 10000), O("b", "qcd1a2b3c4", 10000)]);
+assert.deepEqual(mm.map((m) => m.status), ["duplicate", "duplicate"]); // same receipt claimed twice
+mm = matchSms(sms, [O("a", "QCD1A2B3C4", 10000)], new Set(["QCD1A2B3C4"]));
+assert.equal(mm[0].status, "duplicate"); // receipt already used on a paid order
+mm = matchSms("xQCD1A2B3C4y received Tsh10,000", [O("a", "QCD1A2B3C4", 10000)]);
+assert.equal(mm[0].status, "missing"); // reference glued to other letters is not a match
+mm = matchSms(mpesa, [O("a", "ABC", 10000)]);
+assert.equal(mm[0].status, "missing"); // refs shorter than 6 characters are never trusted
+mm = matchSms(mpesa, [O("a", "QCD 1A2B 3C4", 10000)]);
+assert.equal(mm[0].status, "ready"); // customer typed spaces in the ref
+mm = matchSms(mpesa.replace(/\n/g, " ") + " " + tigo, [O("a", "QCD1A2B3C4", 10000), O("b", "12345678901", 8000)]);
+assert.equal(mm[0].status, "ready"); // run-together messages (no blank lines) still work
+assert.equal(matchSms("", [O("a", "QCD1A2B3C4", 10000)])[0].status, "missing");
+assert.deepEqual(receivedAmounts("Umepokea TSh 8,000 kutoka X. Salio jipya TSh 50,000."), [8000]);
+assert.deepEqual(receivedAmounts("Tsh 5,000/= imelipwa"), [5000]);
+// payment state rules
 const cb1 = parseCallback({ msisdn: "255700000000", amount: "1000", message: "Payment completed", utilityref: "fc123-ab12cd", operator: "Airtel", reference: "AZAM-9", transactionstatus: "success" });
 assert.deepEqual(cb1, { externalId: "fc123-ab12cd", status: "success", amount: "1000", providerRef: "AZAM-9", message: "Payment completed", password: null });
 assert.equal(parseCallback({ UtilityRef: "x1", TransactionStatus: "Success", Amount: 1000 })?.status, "success"); // case-insensitive

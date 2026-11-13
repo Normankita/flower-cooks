@@ -5,6 +5,7 @@ import ToastForm from "@/components/ToastForm";
 import { getOrders, getRecentCycles, selectCycle } from "@/lib/data";
 import { displayPhone } from "@/lib/phone";
 import HomeStop from "@/components/HomeStop";
+import SmsReconcile from "@/components/SmsReconcile";
 import type { LatLng } from "@/lib/geo";
 import { linesText, placeName } from "@/lib/summary";
 import { tzs } from "@/lib/time";
@@ -115,6 +116,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         <a href={`/admin/export/orders?c=${cycle.id}`} download className="btn-ghost btn-sm">⬇️ Mzunguko huu</a>
         <a href="/admin/export/orders" download className="btn-ghost btn-sm">⬇️ Oda zote</a>
       </div>
+      <SmsReconcile waiting={orders.filter((o) => o.payment_status === "reported" && (o.status === "confirmed" || o.status === "delivered")).length} />
       {late.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-semibold text-orange-800">Maombi ya ziada ({late.length})</h2>
