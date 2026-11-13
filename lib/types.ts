@@ -51,6 +51,8 @@ export type Order = {
   review_token: string;
   delivered_at: string | null;
   created_at: string;
+  /** set when this order was created from a customer's standing (weekly) order (migration 0010) */
+  standing_id: string | null;
   delivery_type: "office" | "home";
   delivery_lat: number | null;
   delivery_lng: number | null;

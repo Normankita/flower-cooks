@@ -134,4 +134,44 @@ assert.deepEqual((await one(`select create_order_atomic($1::uuid,'open','{}'::js
 assert.equal((await one(`select create_order_atomic($1::uuid,'open','{}'::jsonb,'{}'::jsonb,'[{}]'::jsonb) as r`, [crypto.randomUUID()]).catch(() => ({ r: { ok: false } }))).r.ok, false, 'unknown cycle');
 await assert.rejects(db.query(`select create_order_atomic($1::uuid,'hack','{}'::jsonb,'{}'::jsonb,'[]'::jsonb)`, [cyc]), /bad mode/);
 
+// ---- standing orders (migration 0010)
+const sc = (await one(`select id from customers where phone='255700000777'`)).id;
+const so = (await one(
+  `insert into standing_orders (customer_id, office_id, payment_method, lines) values ($1,$2,'cash',$3::jsonb) returning id, token, active`,
+  [sc, office, JSON.stringify([{ item_id: item, qty: 2 }])],
+));
+assert.equal(so.active, true);
+assert.match(String(so.token), /^[0-9a-f-]{36}$/);
+// one ACTIVE standing order per customer; a paused one doesn't count
+await assert.rejects(db.query(`insert into standing_orders (customer_id, payment_method, lines) values ($1,'cash',$2::jsonb)`, [sc, JSON.stringify([{ item_id: item, qty: 1 }])]), /unique|duplicate/i);
+await db.exec(`update standing_orders set active=false where id='${so.id}'`);
+const so2 = await one(`insert into standing_orders (customer_id, payment_method, lines) values ($1,'cash',$2::jsonb) returning id`, [sc, JSON.stringify([{ item_id: item, qty: 1 }])]);
+await assert.rejects(db.exec(`update standing_orders set active=true where id='${so.id}'`), /unique|duplicate/i, 'cannot resume while another is active');
+await db.exec(`delete from standing_orders where id='${so2.id}'`);
+await db.exec(`update standing_orders set active=true where id='${so.id}'`);
+// lines must be a non-empty array
+await assert.rejects(db.query(`insert into standing_orders (customer_id, payment_method, lines) values ($1,'cash','[]'::jsonb)`, [crypto.randomUUID()]), /violates|check|foreign/i);
+// the function stores standing_id; replays with the deterministic key return the same order
+const sk = crypto.randomUUID();
+const viaFn = async () => (await one(
+  `select create_order_atomic($1::uuid,'open',$2::jsonb,$3::jsonb,$4::jsonb) as r`,
+  [cyc, JSON.stringify({ phone: '255700000777', name: 'X', office_id: office }), JSON.stringify({ office_id: office, delivery_type: 'office', status: 'confirmed', payment_method: 'cash', total: 16000, idempotency_key: sk, standing_id: so.id }), JSON.stringify([{ item_id: item, qty: 2, unit_price: 8000 }])],
+)).r;
+const s1 = await viaFn();
+const s2 = await viaFn();
+assert.equal(s1.ok && s2.ok, true);
+assert.equal(s1.id, s2.id, 'same key → same order (materialising twice cannot duplicate)');
+assert.equal((await one(`select standing_id from orders where id=$1`, [s1.id])).standing_id, so.id);
+// skipping: one row per (standing, cycle)
+await db.query(`insert into standing_skips (standing_id, cycle_id) values ($1,$2)`, [so.id, cyc]);
+await assert.rejects(db.query(`insert into standing_skips (standing_id, cycle_id) values ($1,$2)`, [so.id, cyc]), /unique|duplicate|primary/i);
+// deleting a standing order keeps its past orders (standing_id set null) and removes its skips
+await db.exec(`delete from standing_orders where id='${so.id}'`);
+assert.equal((await one(`select standing_id from orders where id=$1`, [s1.id])).standing_id, null, 'past orders survive');
+assert.equal(await count(`select count(*) n from standing_skips`), 0, 'skips cascade');
+// reviews: hidden defaults to false
+const ro = (await one(`select id from orders limit 1`)).id;
+const rv = await one(`insert into reviews (order_id, rating, comment) values ($1, 5, 'ok') returning hidden`, [ro]);
+assert.equal(rv.hidden, false);
+
 console.log('create_order_atomic: all checks passed');

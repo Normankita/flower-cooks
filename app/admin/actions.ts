@@ -13,6 +13,8 @@ import { DbUnavailableError } from "@/lib/db-error";
 import { inTanzania } from "@/lib/geo";
 import { matchSms, normalizeRef, refCandidates, type SmsOrder, type SmsStatus } from "@/lib/sms-match";
 import { markWhatsApp, runReminder, type RunSummary } from "@/lib/reminders-db";
+import { materializeStanding, type MaterializeSummary } from "@/lib/standing-db";
+import type { Cycle } from "@/lib/types";
 import type { Kind } from "@/lib/reminders";
 import { fail, fromDb, type ActionResult } from "@/lib/result";
 
@@ -75,6 +77,45 @@ export async function setPayment(fd: FormData): Promise<ActionResult> {
     : { payment_status: "unpaid", paid_at: null };
   if (paid && ref) patch.payment_ref = ref;
   const { error } = await db().from("orders").update(patch).eq("id", str(fd, "order_id"));
+  return finish(error);
+}
+
+/* ---------- standing ("every week") orders ---------- */
+/** Create this cycle's orders from active standing orders now (idempotent; skipped weeks and existing orders are left alone). */
+export async function runStandingNow(): Promise<MaterializeSummary> {
+  await requireAdmin();
+  const empty = { created: 0, existing: 0, full: 0, skipped: 0, failed: 0 };
+  try {
+    const cycle = await getCurrentCycle();
+    if (!cycle) return { ok: false, reason: "Hakuna mzunguko.", ...empty };
+    const r = await materializeStanding(cycle);
+    if (r.created > 0) refresh();
+    return r;
+  } catch {
+    return { ok: false, reason: "Tatizo la mtandao. Jaribu tena.", ...empty };
+  }
+}
+
+export async function adminSetStanding(fd: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const id = str(fd, "id");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return fail("Imeshindikana.");
+  if (str(fd, "do") === "delete") {
+    const { error } = await db().from("standing_orders").delete().eq("id", id);
+    return finish(error);
+  }
+  const { error } = await db().from("standing_orders").update({ active: str(fd, "active") === "1", updated_at: new Date().toISOString() }).eq("id", id);
+  if (error?.code === "23505") return fail("Mteja huyu ana oda nyingine ya kila wiki inayofanya kazi.");
+  return finish(error);
+}
+
+/* ---------- reviews ---------- */
+export async function setReviewHidden(fd: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const id = str(fd, "id");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return fail("Imeshindikana.");
+  const { error } = await db().from("reviews").update({ hidden: str(fd, "hidden") === "1" }).eq("id", id);
+  if (!error) revalidatePath("/", "layout");
   return finish(error);
 }
 
@@ -229,7 +270,7 @@ export async function createCycle(): Promise<ActionResult> {
   const closes = nextWeekdayEAT(4, 20, 0); // Thursday 20:00 EAT
   const delivery = nextWeekdayEAT(5, 13, 0, closes); // Friday 13:00 EAT
   const label = new Intl.DateTimeFormat("sw-TZ", { timeZone: "Africa/Dar_es_Salaam", day: "numeric", month: "short" }).format(delivery);
-  const { error } = await db().from("cycles").insert({
+  const { data: created, error } = await db().from("cycles").insert({
     title: `Biriani ya Ijumaa ${label}`,
     opens_at: new Date().toISOString(),
     closes_at: closes.toISOString(),
@@ -244,7 +285,15 @@ export async function createCycle(): Promise<ActionResult> {
     home_max_km: prev?.home_max_km ?? null,
     kitchen_lat: prev?.kitchen_lat ?? null,
     kitchen_lng: prev?.kitchen_lng ?? null,
-  });
+  }).select("*").single();
+
+  // Customers' standing ("every week") orders for the new cycle. Best effort and idempotent: it can be re-run any time
+  // from the "Oda za kila wiki" page.
+  if (!error && created) {
+    try {
+      await materializeStanding(created as Cycle);
+    } catch {}
+  }
 
   // Privacy: forget customers' home locations 30 days after the order (best effort; ignore failures).
   if (!error) {

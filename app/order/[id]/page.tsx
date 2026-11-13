@@ -13,7 +13,8 @@ import { detectNetwork } from "@/lib/mobile-network";
 import { activePending, ageMs, getOrderPayments } from "@/lib/payments-db";
 import { displayPhone } from "@/lib/phone";
 import { tzs } from "@/lib/time";
-import { cancelOrder, reportPayment } from "@/app/actions";
+import { getStandingForCustomer } from "@/lib/standing-db";
+import { cancelOrder, makeStandingOrder, reportPayment } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // the pay-by-phone action waits on AzamPay, which can take ~30 s
@@ -57,6 +58,18 @@ export default async function OrderPage({
       else if (pays[0]) lastStatus = pays[0].status === "failed" ? "failed" : pays[0].status === "success" ? null : "expired";
     } catch (e) {
       console.error("order page: payments unavailable, using manual flow:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  // Weekly ("every week") orders: offered for confirmed/delivered OFFICE orders. If the table isn't there yet, hide it.
+  const canStand = order.delivery_type === "office" && (order.status === "confirmed" || order.status === "delivered") && !!order.customers;
+  let standing: { token: string; active: boolean } | null = null;
+  let standOk = canStand;
+  if (canStand && order.customers) {
+    try {
+      standing = await getStandingForCustomer(order.customers.id);
+    } catch {
+      standOk = false;
     }
   }
 
@@ -164,6 +177,29 @@ export default async function OrderPage({
       )}
       {order.payment_method === "cash" && order.payment_status !== "paid" && order.status === "confirmed" && (
         <p className="card text-sm text-stone-700">{t.payLater}</p>
+      )}
+
+      {standOk && (
+        <section className="card space-y-2">
+          <h2 className="font-semibold">🔁 {t.standingTitle}</h2>
+          {standing?.active ? (
+            <p className="text-sm text-stone-600">{t.standingOn}</p>
+          ) : standing ? (
+            <p className="text-sm text-stone-600">{t.standingPaused}</p>
+          ) : (
+            <p className="text-sm text-stone-600">{t.standingOffer}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <ToastForm action={makeStandingOrder} success={t.standingSaved} errorText={t.errToast}>
+              {hidden}
+              <SubmitButton className="btn btn-sm">{standing ? t.standingUpdate : t.standingBtn}</SubmitButton>
+            </ToastForm>
+            {standing && <Link href={`/s/${standing.token}?lang=${lang}`} className="btn-ghost btn-sm">{t.standingManage}</Link>}
+          </div>
+        </section>
+      )}
+      {order.delivery_type === "home" && (order.status === "confirmed" || order.status === "delivered") && (
+        <p className="card text-xs text-stone-500">{t.standingHome}</p>
       )}
 
       <section className="flex flex-wrap gap-2">

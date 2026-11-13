@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/supabase";
-import { cycleMode, getCycle, getOrder } from "@/lib/data";
+import { createStandingFromOrder, getStandingByToken, setStandingActive, skipWeek, unskipWeek } from "@/lib/standing-db";
+import { cycleMode, getCurrentCycle, getCycle, getOrder } from "@/lib/data";
 import { createOrder, parseOrderForm } from "@/lib/orders";
 import { fill, getLang, strings } from "@/lib/i18n";
 import { DbUnavailableError } from "@/lib/db-error";
@@ -123,6 +124,71 @@ export async function myOrders(ids: string[]): Promise<OrderBrief[]> {
     return error ? [] : ((data ?? []) as OrderBrief[]);
   } catch {
     return [];
+  }
+}
+
+/* ---------- standing ("every week") orders ---------- */
+
+/** Make this (office) order the customer's weekly order. The order link is the credential, like paying/cancelling. */
+export async function makeStandingOrder(fd: FormData): Promise<ActionResult> {
+  const id = String(fd.get("order_id") ?? "");
+  const t = strings(getLang(String(fd.get("lang") ?? "sw")));
+  try {
+    const r = await createStandingFromOrder(id);
+    if (!r.ok) return fail(r.reason === "home" ? t.standingHome : t.errToast);
+    revalidatePath(`/order/${id}`);
+    return OK;
+  } catch {
+    return fail(t.errToast);
+  }
+}
+
+async function standingContext(fd: FormData) {
+  const token = String(fd.get("token") ?? "");
+  const t = strings(getLang(String(fd.get("lang") ?? "sw")));
+  const s = await getStandingByToken(token);
+  const cycle = await getCurrentCycle();
+  return { token, t, s, cycle };
+}
+
+export async function standingSkip(fd: FormData): Promise<ActionResult> {
+  try {
+    const { token, t, s, cycle } = await standingContext(fd);
+    if (!s || !cycle) return fail(t.errToast);
+    const r = await skipWeek(s, cycle);
+    if (r === "paid") return fail(t.stPaidCant);
+    if (r === "closed") return fail(t.stClosed);
+    revalidatePath(`/s/${token}`);
+    return OK;
+  } catch {
+    return fail(strings("sw").errToast);
+  }
+}
+
+export async function standingUnskip(fd: FormData): Promise<ActionResult> {
+  try {
+    const { token, t, s, cycle } = await standingContext(fd);
+    if (!s || !cycle) return fail(t.errToast);
+    const r = await unskipWeek(s, cycle);
+    revalidatePath(`/s/${token}`);
+    if (r === "full") return fail(t.stFull);
+    if (r === "closed") return fail(t.stClosed);
+    if (r === "failed") return fail(t.errToast);
+    return OK;
+  } catch {
+    return fail(strings("sw").errToast);
+  }
+}
+
+export async function standingSetActive(fd: FormData): Promise<ActionResult> {
+  try {
+    const { token, t, s } = await standingContext(fd);
+    if (!s) return fail(t.errToast);
+    const ok = await setStandingActive(token, String(fd.get("active")) === "1");
+    revalidatePath(`/s/${token}`);
+    return ok ? OK : fail(t.errToast);
+  } catch {
+    return fail(strings("sw").errToast);
   }
 }
 

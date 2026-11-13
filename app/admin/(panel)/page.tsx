@@ -111,6 +111,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <Link href="/admin/reminders" className="card block font-medium">
         📣 Vikumbusho vya SMS na WhatsApp kwa wateja →
       </Link>
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/admin/standing" className="card block text-sm font-medium">🔁 Oda za kila wiki →</Link>
+        <Link href="/admin/reviews" className="card block text-sm font-medium">⭐ Maoni ya wateja →</Link>
+      </div>
 
       <section className="card space-y-3">
         <h2 className="font-semibold">📣 Ujumbe wa WhatsApp</h2>

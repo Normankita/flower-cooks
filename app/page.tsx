@@ -1,6 +1,7 @@
 import Link from "next/link";
 import InstallPrompt from "@/components/InstallPrompt";
 import MyOrders from "@/components/MyOrders";
+import ReviewsCard from "@/components/ReviewsCard";
 import StaffLink from "@/components/StaffLink";
 import OrderForm from "@/components/OrderForm";
 import ThemeSuggest from "@/components/ThemeSuggest";
@@ -71,6 +72,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
       )}
 
       {cycle && <MyOrders cycleId={cycle.id} lang={lang} t={t} />}
+
+      <ReviewsCard t={t} />
 
       {(mode === "none" || mode === "not_yet") && <p className="card">{t.noCycle}</p>}
       {mode === "closed" && <p className="card">{t.manuallyClosed}</p>}

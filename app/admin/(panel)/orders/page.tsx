@@ -51,7 +51,10 @@ function Row({ o, kitchen, lipa }: { o: Order; kitchen: LatLng | null; lipa: str
     <div className={`card space-y-2 ${dead ? "opacity-60" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <div className="font-semibold">{o.customers?.name}</div>
+          <div className="font-semibold">
+            {o.customers?.name}
+            {o.standing_id && <span className="badge ml-2 bg-blue-100 text-blue-800">🔁 Kila wiki</span>}
+          </div>
           <a className="text-sm text-orange-700 underline" href={`tel:+${o.customers?.phone}`}>{displayPhone(o.customers?.phone ?? "")}</a>
           <div className="text-sm text-stone-600">{placeName(o)}{o.delivery_note ? ` · ${o.delivery_note}` : ""}</div>
         </div>

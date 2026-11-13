@@ -12,6 +12,7 @@ import { detectNetwork } from "../lib/mobile-network.ts";
 import { normalizeStatus, parseCallback } from "../lib/azampay-callback.ts";
 import { checkCustomerMessage, matchSms, receivedAmounts, refCandidates } from "../lib/sms-match.ts";
 import { audience, buildMessage, dayAllows, eatWeekday, smsSegments } from "../lib/reminders.ts";
+import { cleanLines, priceStanding, publicComment, reviewSummary } from "../lib/standing.ts";
 import { amountMatches, becameSuccess, nextStatus, shouldMarkOrderPaid } from "../lib/payments.ts";
 import { fmtKm, haversineKm, inTanzania, navUrl, normalizeMapUrl, orderStops, parseHome, parseLatLng, routeUrls } from "../lib/geo.ts";
 
@@ -75,6 +76,32 @@ assert.equal(detectNetwork("255625123456"), "Halopesa");
 assert.equal(detectNetwork("255735123456"), null); // unknown prefix: customer must choose
 assert.equal(detectNetwork("0744123456"), null); // not normalised
 assert.equal(detectNetwork("25574412345"), null); // too short
+// standing orders + reviews
+const menuL = [{ id: "00000000-0000-4000-8000-000000000001", price: 8000, active: true }, { id: "00000000-0000-4000-8000-000000000002", price: 10000, active: true }, { id: "00000000-0000-4000-8000-000000000003", price: 5000, active: false }];
+const sp = priceStanding([{ item_id: menuL[0].id, qty: 2 }, { item_id: menuL[1].id, qty: 1 }], menuL);
+assert.deepEqual([sp.total, sp.portions, sp.dropped], [26000, 3, 0]);
+const sp2 = priceStanding([{ item_id: menuL[0].id, qty: 1 }, { item_id: menuL[2].id, qty: 4 }, { item_id: "nope", qty: 1 }], menuL);
+assert.deepEqual([sp2.lines.length, sp2.total, sp2.dropped], [1, 8000, 2]); // inactive + unknown items dropped
+assert.equal(priceStanding([{ item_id: menuL[0].id, qty: 99 }], menuL).lines[0].qty, 20); // clamp like the order form
+assert.equal(priceStanding([], menuL).lines.length, 0);
+assert.deepEqual(cleanLines([{ item_id: menuL[0].id, qty: 2 }, { item_id: "bad", qty: 1 }, { item_id: menuL[1].id, qty: 0 }, null]), [{ item_id: menuL[0].id, qty: 2 }]);
+assert.deepEqual(cleanLines("x"), []);
+assert.equal(publicComment("Biriani tamu sana, asante!"), "Biriani tamu sana, asante!");
+assert.equal(publicComment("tembelea www.spam.com"), null);
+assert.equal(publicComment("piga 0712 345 678 sasa"), null);
+assert.equal(publicComment("namba 255712345678"), null);
+assert.equal(publicComment("mail me a@b.co"), null);
+assert.equal(publicComment("https://x.y"), null);
+assert.equal(publicComment("  "), null);
+assert.equal(publicComment(null), null);
+assert.equal(publicComment("Bei ni 8,000 na ilikuwa nzuri"), "Bei ni 8,000 na ilikuwa nzuri"); // amounts are fine
+assert.ok((publicComment("a".repeat(500)) ?? "").length <= 200);
+const rv = (rating: number, comment: string | null, name: string, hidden = false, d = "2026-11-10") => ({ rating, comment, name, hidden, created_at: d + "T10:00:00Z" });
+const rs = reviewSummary([rv(5, "Tamu sana", "Asha Juma", false, "2026-11-12"), rv(4, "Nzuri", "Baraka Ali", false, "2026-11-11"), rv(2, "Mbaya", "Chiku", false, "2026-11-13"), rv(5, "piga 0712345678", "Dani"), rv(5, "Hidden one", "Eli", true), rv(5, null, "Fatma")]);
+assert.equal(rs.count, 5); // hidden one excluded
+assert.equal(rs.avg, 4.2); // (5+4+2+5+5)/5
+assert.deepEqual(rs.recent.map((r) => [r.name, r.text]), [["Asha", "Tamu sana"], ["Baraka", "Nzuri"]]); // newest first; 2★, phone, hidden, empty all excluded; first names only
+assert.deepEqual(reviewSummary([]), { count: 0, avg: 0, recent: [] });
 // reminders
 const msgOpts = { brand: "Flower Cooks", site: "https://flowercooks.norzah.dev", closes: "Alhamisi 20:00", unsubUrl: "https://flowercooks.norzah.dev/u/00000000-0000-4000-8000-000000000001" };
 for (const k of ["wed", "thu", "fri"] as const) {

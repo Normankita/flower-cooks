@@ -4,7 +4,7 @@ import type { Cycle, MenuItem, Office, Order } from "./types";
 
 export const ORDER_SELECT =
   "id,cycle_id,status,payment_method,payment_status,payment_ref,payment_msg,total,notes,delivery_note,review_token,delivered_at,created_at," +
-  "delivery_type,delivery_lat,delivery_lng,location_url," +
+  "delivery_type,delivery_lat,delivery_lng,location_url,standing_id," +
   "customers(id,name,phone),offices(id,name)," +
   "order_lines(id,qty,unit_price,item_id,menu_items(name,rice_kg,protein_kg))";
 
