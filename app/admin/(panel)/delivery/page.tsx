@@ -45,12 +45,13 @@ export default async function DeliveryPage({ searchParams }: { searchParams: Pro
   const toCollect = route.filter((o) => o.payment_status !== "paid").reduce((s, o) => s + o.total, 0);
 
   // Debts across all cycles, grouped by customer
-  const debts = new Map<string, { name: string; phone: string; total: number; n: number }>();
+  const debts = new Map<string, { name: string; phone: string; total: number; n: number; ids: string[] }>();
   for (const o of (debtRes.data as unknown as Order[]) ?? []) {
     if (!o.customers) continue;
-    const d = debts.get(o.customers.id) ?? { name: o.customers.name, phone: o.customers.phone, total: 0, n: 0 };
+    const d = debts.get(o.customers.id) ?? { name: o.customers.name, phone: o.customers.phone, total: 0, n: 0, ids: [] };
     d.total += o.total;
     d.n += 1;
+    d.ids.push(o.id);
     debts.set(o.customers.id, d);
   }
   const debtList = [...debts.values()].sort((a, b) => b.total - a.total);
@@ -151,7 +152,9 @@ export default async function DeliveryPage({ searchParams }: { searchParams: Pro
         </div>
         {debtList.length === 0 && <p className="text-sm text-stone-500">Hakuna deni 🎉</p>}
         {debtList.map((d) => {
-          const msg = `Habari ${d.name.split(" ")[0]}, kumbusho dogo la malipo ya biriani: ${tzs(d.total)}. Asante! 🙏`;
+          // each link opens that customer's own order with the payment details (the long random address is the "key")
+          const payLinks = site ? d.ids.slice(0, 3).map((id) => `${site}/order/${id}`).join("\n") : "";
+          const msg = `Habari ${d.name.split(" ")[0]}, kumbusho dogo la malipo ya biriani: ${tzs(d.total)}.${payLinks ? `\nLipa hapa:\n${payLinks}\n` : " "}Asante! 🙏`;
           return (
             <div key={d.phone} className="card flex items-center justify-between gap-2">
               <div>

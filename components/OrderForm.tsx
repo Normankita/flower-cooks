@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import HomeLocation, { type Loc } from "./HomeLocation";
+import { MY_ORDERS_KEY } from "./MyOrders";
 import SubmitButton from "./SubmitButton";
 import { useToast } from "./Toaster";
 import { fill, type Dict } from "@/lib/i18n";
@@ -101,12 +102,23 @@ export default function OrderForm({
   // Success: toast, then go to the result page. Failure: toast the message (retry hints stay inline).
   useEffect(() => {
     if (state.redirectTo) {
+      if (remember) {
+        // remember this order on the device so the home page can offer "pay now" later (see MyOrders)
+        try {
+          const id = /\/order\/([0-9a-f-]{36})/i.exec(state.redirectTo)?.[1];
+          if (id) {
+            const list = (JSON.parse(localStorage.getItem(MY_ORDERS_KEY) ?? "[]") as { id: string; cycleId: string; at: number }[]).filter((x) => x.id !== id);
+            list.unshift({ id, cycleId, at: Date.now() });
+            localStorage.setItem(MY_ORDERS_KEY, JSON.stringify(list.slice(0, 10)));
+          }
+        } catch {}
+      }
       toast(successText, "success");
       router.push(state.redirectTo);
     } else if (state.error && !state.retry) {
       toast(state.error, "error");
     }
-  }, [state, toast, router, successText]);
+  }, [state, toast, router, successText, remember, cycleId]);
 
   // Network failure: resubmit automatically (with backoff), or immediately when the connection returns.
   useEffect(() => {

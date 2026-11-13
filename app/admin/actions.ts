@@ -204,6 +204,7 @@ export async function createCycle(): Promise<ActionResult> {
     delivery_at: delivery.toISOString(),
     capacity: prev?.capacity ?? 60,
     lipa_namba: prev?.lipa_namba ?? null,
+    lipa_name: prev?.lipa_name ?? null,
     status: "open",
     // home-delivery settings carry over from the previous cycle
     home_enabled: prev?.home_enabled ?? false,
@@ -259,6 +260,7 @@ export async function saveCycle(fd: FormData): Promise<ActionResult> {
       delivery_at: delivery.toISOString(),
       capacity: Math.max(1, int(fd, "capacity", 60)),
       lipa_namba: str(fd, "lipa_namba").slice(0, 20) || null,
+      lipa_name: str(fd, "lipa_name").slice(0, 60).toUpperCase() || null,
       home_enabled: fd.get("home_enabled") === "on",
       home_max_stops: stopsRaw ? Math.min(Math.max(0, int(fd, "home_max_stops")), 500) : null,
       home_max_km: kmRaw && Number.isFinite(km) && km > 0 ? Math.min(Math.round(km * 10) / 10, 999) : null,

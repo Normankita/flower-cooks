@@ -1,5 +1,7 @@
 import Link from "next/link";
+import CopyValue from "@/components/CopyValue";
 import PayByPhone from "@/components/PayByPhone";
+import QrToggle from "@/components/QrToggle";
 import SubmitButton from "@/components/SubmitButton";
 import StaffLink from "@/components/StaffLink";
 import SuccessMark from "@/components/SuccessMark";
@@ -57,6 +59,10 @@ export default async function OrderPage({
       console.error("order page: payments unavailable, using manual flow:", e instanceof Error ? e.message : e);
     }
   }
+
+  // The QR image belongs to ONE Lipa Namba (LIPA_QR_NUMBER). If the cook switches the cycle to another number, the QR
+  // is hidden automatically so nobody can scan a QR that pays the wrong account.
+  const showQr = !!cycle?.lipa_namba && !!process.env.LIPA_QR_NUMBER && cycle.lipa_namba.replace(/\D/g, "") === process.env.LIPA_QR_NUMBER.replace(/\D/g, "");
 
   const banner =
     order.status === "late_request" ? t.lateReceived
@@ -124,11 +130,23 @@ export default async function OrderPage({
             <>
               {payByPhone && <div className="border-t border-stone-300/50 pt-3 text-sm font-medium">{t.payOr}</div>}
               <p className="text-sm text-stone-600">{t.payLipaHow}</p>
-              <div className="rounded-2xl bg-linear-to-br from-orange-100/90 to-amber-100/80 p-4 text-center shadow-inner">
+              <div className="space-y-2 rounded-2xl bg-linear-to-br from-orange-100/90 to-amber-100/80 p-4 text-center shadow-inner">
                 <div className="text-sm text-stone-600">{t.lipaNumber}</div>
                 <div className="text-3xl font-extrabold tracking-widest">{cycle.lipa_namba}</div>
+                <div className="flex justify-center">
+                  <CopyValue text={cycle.lipa_namba.replace(/\D/g, "")} label={t.lipaCopy} doneLabel={t.lipaCopied} />
+                </div>
+                {cycle.lipa_name && (
+                  <div className="rounded-xl bg-(--glass) px-3 py-2">
+                    <div className="text-xs text-stone-600">{t.lipaAccount}</div>
+                    <div className="font-bold tracking-wide">{cycle.lipa_name}</div>
+                    <div className="text-xs text-stone-600">{t.lipaAccountHint}</div>
+                  </div>
+                )}
                 <div className="text-sm text-stone-600">{t.amount}: <b>{tzs(order.total)}</b></div>
               </div>
+              <p className="text-xs text-stone-600">{t.lipaNetworks}</p>
+              {showQr && <QrToggle src="/lipa-qr.png" show={t.lipaShowQr} hide={t.lipaHideQr} hint={t.lipaQrHint} />}
               {order.payment_status === "reported" ? (
                 <p className="text-sm text-green-700">{t.payRefSaved} ({order.payment_ref})</p>
               ) : (

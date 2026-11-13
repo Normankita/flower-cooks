@@ -16,6 +16,8 @@ export type Cycle = {
   delivery_at: string;
   capacity: number;
   lipa_namba: string | null;
+  /** account name customers see when paying (migration 0006) */
+  lipa_name?: string | null;
   status: "open" | "closed";
   created_at: string;
   /** home delivery controls (migration 0004) */

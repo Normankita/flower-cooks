@@ -97,6 +97,23 @@ export async function submitReview(fd: FormData): Promise<ActionResult> {
   return OK;
 }
 
+export type OrderBrief = { id: string; status: string; payment_status: string; payment_method: string; total: number };
+
+/**
+ * Status of the orders THIS device placed (it sends the order ids it remembers). The ids are the capability: nobody can
+ * ask by phone number, and only status/payment/total come back (no name, address or location).
+ */
+export async function myOrders(ids: string[]): Promise<OrderBrief[]> {
+  const clean = (Array.isArray(ids) ? ids : []).map(String).filter((i) => /^[0-9a-f-]{36}$/i.test(i)).slice(0, 5);
+  if (clean.length === 0) return [];
+  try {
+    const { data, error } = await db().from("orders").select("id,status,payment_status,payment_method,total").in("id", clean);
+    return error ? [] : ((data ?? []) as OrderBrief[]);
+  } catch {
+    return [];
+  }
+}
+
 const NETWORKS: Network[] = ["Mpesa", "Tigo", "Airtel", "Halopesa"];
 
 /**

@@ -20,6 +20,11 @@ export default async function Settings() {
             <div><label className="label">Kuleta</label><input type="datetime-local" name="delivery_at" defaultValue={toEATInput(cycle.delivery_at)} className="input" required /></div>
             <div><label className="label">Kikomo cha biriani</label><input type="number" min={1} name="capacity" defaultValue={cycle.capacity} className="input" /></div>
             <div><label className="label">Lipa Namba</label><input name="lipa_namba" defaultValue={cycle.lipa_namba ?? ""} className="input" inputMode="numeric" /></div>
+            <div className="col-span-2">
+              <label className="label" htmlFor="lipa_name">Jina la akaunti (wateja wanaliona)</label>
+              <input id="lipa_name" name="lipa_name" defaultValue={cycle.lipa_name ?? ""} className="input uppercase" placeholder="MFANO: JINA KAMILI KAMA LINAVYOONEKANA UKILIPA" maxLength={60} />
+              <p className="mt-1 text-xs text-stone-500">Ni jina linaloonekana kwenye simu ya mteja akilipa Lipa Namba. Linamsaidia kuthibitisha kuwa analipa akaunti sahihi.</p>
+            </div>
           </div>
 
           <div className="space-y-3 rounded-2xl bg-(--glass) p-3">
